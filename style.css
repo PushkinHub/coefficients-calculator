@@ -81,6 +81,30 @@ h2 {
     margin-bottom: 15px;
 }
 
+.example-link {
+    margin: 10px 0;
+    font-size: 0.9em;
+}
+
+.example-link a {
+    color: #667eea;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.example-link a:hover {
+    text-decoration: underline;
+}
+
+.file-type {
+    padding: 20px;
+    border: 1px solid #eaeaea;
+    border-radius: 10px;
+    background: #fafafa;
+}
+
 .file-upload-area {
     border: 2px dashed #667eea;
     border-radius: 10px;
@@ -310,5 +334,9 @@ tr:hover {
     
     .rules-grid, .file-types, .stats-cards {
         grid-template-columns: 1fr;
+    }
+    
+    .actions {
+        flex-direction: column;
     }
 }
