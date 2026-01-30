@@ -67,7 +67,7 @@ function handleFiles(files, filesArray, fileList) {
         console.log(`Файл ${i}: ${file.name}, тип: ${file.type}, размер: ${file.size} байт`);
         
         if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
-            if (filesArray.length < 10) { // Ограничение на количество файлов
+            if (filesArray.length < 10) {
                 filesArray.push(file);
                 console.log(`Добавлен файл: ${file.name}`);
             } else {
@@ -109,14 +109,10 @@ function updateFileList(fileListElement, filesArray) {
 
 // Удаление файла
 function removeFile(index, isDemand) {
-    console.log(`Удаление файла ${index}, isDemand: ${isDemand}`);
-    
     if (isDemand) {
-        console.log(`Удален DEMAND файл: ${demandFiles[index].name}`);
         demandFiles.splice(index, 1);
         updateFileList(document.getElementById('demandFileList'), demandFiles);
     } else {
-        console.log(`Удален SWAT файл: ${swatFiles[index].name}`);
         swatFiles.splice(index, 1);
         updateFileList(document.getElementById('swatFileList'), swatFiles);
     }
@@ -128,16 +124,12 @@ function updateCalculateButton() {
     const calculateBtn = document.getElementById('calculateBtn');
     const isEnabled = demandFiles.length > 0 && swatFiles.length > 0;
     calculateBtn.disabled = !isEnabled;
-    console.log(`Кнопка расчета: ${isEnabled ? 'активна' : 'неактивна'}`);
 }
 
-// Основная функция расчета
 // Основная функция расчета
 async function calculateCoefficients() {
     try {
         console.log('=== НАЧАЛО РАСЧЕТА ===');
-        console.log(`DEMAND файлов: ${demandFiles.length}`);
-        console.log(`SWAT файлов: ${swatFiles.length}`);
         
         // Показываем спиннер
         const btn = document.getElementById('calculateBtn');
@@ -148,101 +140,32 @@ async function calculateCoefficients() {
         btn.disabled = true;
         
         // Читаем файлы
-        console.log('Чтение DEMAND файлов...');
         const demandData = await readCSVFiles(demandFiles, 'demand');
-        console.log(`DEMAND данных прочитано: ${demandData ? demandData.length : 'undefined'}`);
-        
-        console.log('Чтение SWAT файлов...');
         const swatData = await readCSVFiles(swatFiles, 'prediction_swat');
-        console.log(`SWAT данных прочитано: ${swatData ? swatData.length : 'undefined'}`);
-        
-        // Проверяем что данные прочитаны
-        if (!demandData || !Array.isArray(demandData)) {
-            throw new Error('Ошибка чтения DEMAND файлов: данные не являются массивом');
-        }
-        if (!swatData || !Array.isArray(swatData)) {
-            throw new Error('Ошибка чтения SWAT файлов: данные не являются массивом');
-        }
-        
-        // Проверяем что есть данные
-        if (demandData.length === 0) {
-            throw new Error('Не удалось прочитать данные DEMAND. Возможные причины:\n' +
-                          '1. В файлах нет строк с Measure Names = "demand"\n' +
-                          '2. Файлы имеют неправильную структуру\n' +
-                          '3. Разделитель в CSV файле не ";"');
-        }
-        if (swatData.length === 0) {
-            throw new Error('Не удалось прочитать данные SWAT. Возможные причины:\n' +
-                          '1. В файлах нет строк с Measure Names = "prediction_swat"\n' +
-                          '2. Файлы имеют неправильную структуру\n' +
-                          '3. Разделитель в CSV файле не ";"');
-        }
         
         // Обрабатываем данные
-        console.log('Обработка DEMAND данных...');
         const processedDemand = processData(demandData, 'demand_sum');
-        console.log(`Обработано DEMAND записей: ${processedDemand ? processedDemand.length : 'undefined'}`);
-        
-        console.log('Обработка SWAT данных...');
         const processedSwat = processData(swatData, 'swat_sum');
-        console.log(`Обработано SWAT записей: ${processedSwat ? processedSwat.length : 'undefined'}`);
-        
-        // Проверяем что есть обработанные данные
-        if (!processedDemand || processedDemand.length === 0) {
-            console.log('Пример DEMAND данных:', demandData.slice(0, 3));
-            throw new Error('Не удалось обработать данные DEMAND. Проверьте структуру файлов.\n' +
-                          'Убедитесь что файлы содержат колонки: level 1, level 4, value');
-        }
-        if (!processedSwat || processedSwat.length === 0) {
-            console.log('Пример SWAT данных:', swatData.slice(0, 3));
-            throw new Error('Не удалось обработать данные SWAT. Проверьте структуру файлов.\n' +
-                          'Убедитесь что файлы содержат колонки: level 1, level 4, value');
-        }
         
         // Рассчитываем коэффициенты
-        console.log('Расчет коэффициентов...');
         calculationResult = calculate(processedDemand, processedSwat);
-        console.log(`Рассчитано коэффициентов: ${calculationResult.results.length}`);
         
         // Отображаем результаты
         displayResults(calculationResult);
         
         // Показываем секцию результатов
         document.getElementById('resultsSection').style.display = 'block';
-        console.log('Результаты отображены');
         
         // Автоматически скачиваем если включена опция
         if (document.getElementById('autoDownload').checked) {
-            console.log('Автоматическое скачивание...');
             setTimeout(() => {
                 downloadExcel();
             }, 1000);
         }
         
-        console.log('=== РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===');
-        
     } catch (error) {
-        console.error('=== ОШИБКА РАСЧЕТА ===');
-        console.error('Сообщение:', error.message);
-        console.error('Стек:', error.stack);
-        
-        // Детальная информация о состоянии
-        console.log('Состояние demandFiles:', demandFiles.length, demandFiles);
-        console.log('Состояние swatFiles:', swatFiles.length, swatFiles);
-        
-        let errorMessage = 'Ошибка при расчете: ' + error.message;
-        
-        // Добавляем дополнительные подсказки
-        if (error.message.includes('undefined') || error.message.includes('length')) {
-            errorMessage += '\n\n⚠️ Проверьте:';
-            errorMessage += '\n1. Правильность формата CSV файлов';
-            errorMessage += '\n2. Наличие столбца "Measure Names" в файлах';
-            errorMessage += '\n3. Значения в столбце Measure Names: "demand" или "prediction_swat"';
-            errorMessage += '\n4. Разделитель должен быть ";" (точка с запятой)';
-            errorMessage += '\n\nНажмите кнопку "Debug" для просмотра содержимого файлов.';
-        }
-        
-        alert(errorMessage);
+        console.error('Ошибка:', error);
+        alert('Ошибка при расчете: ' + error.message + '\n\nНажмите "Debug Files" для анализа файлов.');
     } finally {
         // Восстанавливаем кнопку
         const btn = document.getElementById('calculateBtn');
@@ -255,7 +178,6 @@ async function calculateCoefficients() {
 }
 
 // Чтение CSV файлов
-// Чтение CSV файлов
 function readCSVFiles(files, measureName) {
     return new Promise((resolve, reject) => {
         if (!files || files.length === 0) {
@@ -265,129 +187,42 @@ function readCSVFiles(files, measureName) {
         
         const allData = [];
         let filesRead = 0;
-        let errors = [];
         
-        files.forEach((file, fileIndex) => {
+        files.forEach(file => {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const text = e.target.result;
-                    console.log(`\n=== Чтение файла ${file.name} (${fileIndex + 1}/${files.length}) ===`);
-                    console.log(`Размер: ${text.length} символов`);
                     
-                    // Проверяем первые 500 символов файла
-                    const preview = text.substring(0, Math.min(500, text.length));
-                    console.log('Препросмотр файла:', preview);
-                    
-                    // Разделяем на строки для анализа
-                    const lines = text.split('\n');
-                    console.log(`Всего строк: ${lines.length}`);
-                    
-                    if (lines.length > 0) {
-                        console.log('Первая строка (заголовки):', lines[0]);
-                        console.log('Вторая строка (данные):', lines[1] || 'нет данных');
-                    }
-                    
-                    // Используем PapaParse для парсинга CSV
+                    // Используем PapaParse
                     const results = Papa.parse(text, {
                         delimiter: ';',
                         header: true,
                         skipEmptyLines: true,
-                        transform: (value, column) => {
-                            // Заменяем запятые на точки в числах
-                            if (value && typeof value === 'string' && value.includes(',')) {
-                                return value.replace(',', '.');
-                            }
-                            return value;
-                        },
-                        error: function(err) {
-                            console.error(`Ошибка PapaParse в файле ${file.name}:`, err);
-                            errors.push(`Файл ${file.name}: ${err.message}`);
-                        }
                     });
-                    
-                    console.log(`Статус парсинга: ${results.errors.length > 0 ? 'с ошибками' : 'успешно'}`);
-                    if (results.errors.length > 0) {
-                        console.warn('Ошибки парсинга:', results.errors);
-                    }
-                    
-                    console.log(`Найдено строк: ${results.data.length}`);
-                    
-                    // Показываем все уникальные значения Measure Names в файле
-                    const allMeasureNames = [...new Set(results.data.map(r => r['Measure Names']).filter(Boolean))];
-                    console.log(`Все Measure Names в файле:`, allMeasureNames);
                     
                     // Фильтруем по Measure Names
                     const filtered = results.data.filter(row => {
-                        const measureValue = row['Measure Names'];
-                        if (!measureValue) {
-                            return false;
-                        }
-                        // Приводим к нижнему регистру для надежности
-                        return measureValue.toLowerCase() === measureName.toLowerCase();
+                        return row['Measure Names'] === measureName;
                     });
-                    
-                    console.log(`Отфильтровано для "${measureName}": ${filtered.length}`);
-                    
-                    if (filtered.length === 0) {
-                        console.warn(`ВНИМАНИЕ: Не найдено данных для "${measureName}" в файле ${file.name}`);
-                        console.log(`Доступные значения Measure Names: ${allMeasureNames.join(', ')}`);
-                    } else {
-                        // Дебаг: посмотрим первую строку отфильтрованных данных
-                        console.log('Пример отфильтрованной строки:', filtered[0]);
-                        console.log('Ключи строки:', Object.keys(filtered[0]));
-                        
-                        // Проверяем наличие необходимых колонок
-                        const requiredColumns = ['level 1', 'level 4'];
-                        const missingColumns = requiredColumns.filter(col => !filtered[0][col]);
-                        if (missingColumns.length > 0) {
-                            console.warn(`Отсутствуют колонки: ${missingColumns.join(', ')}`);
-                        }
-                    }
                     
                     allData.push(...filtered);
                     
                 } catch (error) {
-                    console.error(`Критическая ошибка при обработке файла ${file.name}:`, error);
-                    errors.push(`Файл ${file.name}: ${error.message}`);
+                    console.error('Ошибка парсинга:', error);
                 }
                 
                 filesRead++;
-                if (filesRead === files.length) {
-                    console.log(`\n=== ИТОГИ для ${measureName} ===`);
-                    console.log(`Прочитано файлов: ${filesRead}`);
-                    console.log(`Всего строк данных: ${allData.length}`);
-                    console.log(`Ошибок: ${errors.length}`);
-                    
-                    if (errors.length > 0) {
-                        console.warn('Список ошибок:', errors);
-                    }
-                    
-                    if (allData.length === 0 && errors.length === 0) {
-                        reject(new Error(`Не найдено данных с Measure Names = "${measureName}" в загруженных файлах.\n` +
-                                       `Проверьте что в файлах есть колонка "Measure Names" со значением "${measureName}"`));
-                    } else if (allData.length === 0) {
-                        reject(new Error(`Не удалось прочитать данные:\n${errors.join('\n')}`));
-                    } else {
-                        resolve(allData);
-                    }
-                }
-            };
-            
-            reader.onerror = function(e) {
-                console.error(`Ошибка чтения файла ${file.name}:`, e);
-                errors.push(`Файл ${file.name}: ошибка чтения`);
-                filesRead++;
-                
                 if (filesRead === files.length) {
                     if (allData.length === 0) {
-                        reject(new Error(`Не удалось прочитать файлы:\n${errors.join('\n')}`));
+                        reject(new Error(`Не найдено данных с Measure Names = "${measureName}"`));
                     } else {
                         resolve(allData);
                     }
                 }
             };
             
+            reader.onerror = reject;
             reader.readAsText(file, 'UTF-8');
         });
     });
@@ -395,110 +230,36 @@ function readCSVFiles(files, measureName) {
 
 // Обработка данных
 function processData(data, sumColumn) {
-    console.log(`Обработка ${data.length} строк для ${sumColumn}`);
-    
-    if (data.length === 0) {
-        console.warn('Нет данных для обработки');
-        return [];
-    }
-    
     const grouped = {};
     
-    data.forEach((row, index) => {
-        try {
-            // Дебаг для первых нескольких строк
-            if (index < 3) {
-                console.log(`Строка ${index}:`, row);
-                console.log('Ключи:', Object.keys(row));
-            }
-            
-            // Создаем уникальный идентификатор
-            const level1 = (row['level 1'] || '').toString().trim().replace(/\s+/g, '');
-            const level4 = (row['level 4'] || '').toString().trim().replace(/\.0$/, '');
-            const productId = level1 + level4;
-            
-            if (!productId) {
-                console.warn('Пропущена строка без productId:', row);
-                return;
-            }
-            
-            if (!grouped[productId]) {
-                grouped[productId] = {
-                    product_id: productId,
-                    level1: row['level 1'],
-                    level2: row['level 2'],
-                    level3: row['level 3'],
-                    level4: row['level 4'],
-                    sum: 0,
-                    details: []
-                };
-            }
-            
-            // Ищем значение в колонках
-            let value = 0;
-            const valueKeys = ['value', 'Value', 'VALUE', 'значение', 'Значение'];
-            
-            for (const key of valueKeys) {
-                if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
-                    const val = parseFloat(row[key]);
-                    if (!isNaN(val)) {
-                        value = val;
-                        break;
-                    }
-                }
-            }
-            
-            // Если не нашли в стандартных ключах, ищем числовую колонку
-            if (value === 0) {
-                const keys = Object.keys(row);
-                for (const key of keys) {
-                    // Пропускаем нечисловые колонки
-                    if (['Measure Names', 'level 1', 'level 2', 'level 3', 'level 4', 'date_scale'].includes(key)) {
-                        continue;
-                    }
-                    
-                    const val = parseFloat(row[key]);
-                    if (!isNaN(val)) {
-                        value = val;
-                        console.log(`Найдено значение в колонке ${key}: ${value}`);
-                        break;
-                    }
-                }
-            }
-            
-            grouped[productId].sum += value;
-            grouped[productId].details.push({
-                value: value,
-                date: row['date_scale'] || row['date_scale'] || '',
-                file: 'загруженный файл'
-            });
-            
-        } catch (error) {
-            console.error(`Ошибка обработки строки ${index}:`, error, row);
+    data.forEach(row => {
+        const productId = (row['level 1'] || '') + (row['level 4'] || '');
+        
+        if (!productId) return;
+        
+        if (!grouped[productId]) {
+            grouped[productId] = {
+                product_id: productId,
+                level1: row['level 1'],
+                level2: row['level 2'],
+                level3: row['level 3'],
+                level4: row['level 4'],
+                sum: 0,
+            };
         }
+        
+        const value = parseFloat(row['value'] || '0');
+        grouped[productId].sum += value;
     });
     
-    // Преобразуем в массив
-    const result = Object.values(grouped).map(item => ({
+    return Object.values(grouped).map(item => ({
         ...item,
         [sumColumn]: item.sum
     }));
-    
-    console.log(`Сгруппировано ${result.length} товаров для ${sumColumn}`);
-    if (result.length > 0) {
-        console.log('Пример сгруппированной записи:', result[0]);
-    } else {
-        console.warn('Не удалось сгруппировать данные!');
-    }
-    
-    return result;
 }
 
 // Расчет коэффициентов
 function calculate(demandData, swatData) {
-    console.log('Начало расчета коэффициентов...');
-    
-    // Создаем мапу для быстрого доступа
     const demandMap = new Map();
     demandData.forEach(item => {
         demandMap.set(item.product_id, item);
@@ -509,13 +270,10 @@ function calculate(demandData, swatData) {
         swatMap.set(item.product_id, item);
     });
     
-    // Объединяем данные
     const allProductIds = new Set([
         ...demandData.map(d => d.product_id),
         ...swatData.map(s => s.product_id)
     ]);
-    
-    console.log(`Всего уникальных product_id: ${allProductIds.size}`);
     
     const results = [];
     
@@ -526,32 +284,24 @@ function calculate(demandData, swatData) {
         const demandSum = demand ? demand.demand_sum : 0;
         const swatSum = swat ? swat.swat_sum : 0;
         
-        // Округляем суммы
         const demandRounded = Math.round(demandSum);
         const swatRounded = Math.round(swatSum);
         
-        // Вычисляем коэффициент
         let coefficientRaw = 0;
         if (swatRounded !== 0) {
             coefficientRaw = demandRounded / swatRounded;
         }
         
-        // Округляем до 2 знаков
         coefficientRaw = Math.round(coefficientRaw * 100) / 100;
         
-        // Применяем правила корректировки
         let coefficientAdjusted = coefficientRaw;
-        let adjustmentType = 'none';
         
         if (coefficientRaw >= 0.96 && coefficientRaw <= 1.04) {
             coefficientAdjusted = 1.00;
-            adjustmentType = 'range';
         } else if (coefficientRaw < 0.8) {
             coefficientAdjusted = 0.80;
-            adjustmentType = 'min';
         } else if (coefficientRaw > 1.5) {
             coefficientAdjusted = 1.50;
-            adjustmentType = 'max';
         }
         
         results.push({
@@ -561,14 +311,13 @@ function calculate(demandData, swatData) {
             coefficient_adjusted: coefficientAdjusted,
             demand_sum: demandRounded,
             swat_sum: swatRounded,
-            adjustment_type: adjustmentType
+            adjustment_type: coefficientRaw !== coefficientAdjusted ? 
+                (coefficientRaw >= 0.96 && coefficientRaw <= 1.04 ? 'range' :
+                 coefficientRaw < 0.8 ? 'min' : 'max') : 'none'
         });
     });
     
-    // Сортируем по product_id
     results.sort((a, b) => a.product_id.localeCompare(b.product_id));
-    
-    console.log(`Рассчитано коэффициентов: ${results.length}`);
     
     return {
         results: results,
@@ -588,8 +337,6 @@ function calculateStatistics(results) {
                                   r.coefficient_adjusted !== 1.50).length
     };
     
-    console.log('Статистика расчета:', stats);
-    
     return stats;
 }
 
@@ -597,30 +344,20 @@ function calculateStatistics(results) {
 function displayResults(result) {
     const stats = result.statistics;
     
-    // Обновляем статистику
     document.getElementById('totalProducts').textContent = stats.total;
     document.getElementById('coeff100').textContent = stats.coeff_100;
     document.getElementById('coeff08').textContent = stats.coeff_08;
     document.getElementById('coeff15').textContent = stats.coeff_15;
     
-    // Заполняем таблицу предпросмотра
     const tableBody = document.querySelector('#previewTable tbody');
     tableBody.innerHTML = '';
     
-    const previewRows = Math.min(10, result.results.length);
-    console.log(`Отображение предпросмотра ${previewRows} строк`);
-    
-    result.results.slice(0, previewRows).forEach(row => {
+    result.results.slice(0, 10).forEach(row => {
         const tr = document.createElement('tr');
         
-        // Определяем маркер
         let marker = '';
         if (row.coefficient_raw !== row.coefficient_adjusted) {
-            if (row.coefficient_raw >= 0.96 && row.coefficient_raw <= 1.04) {
-                marker = '*';
-            } else {
-                marker = '**';
-            }
+            marker = row.coefficient_raw >= 0.96 && row.coefficient_raw <= 1.04 ? '*' : '**';
         }
         
         tr.innerHTML = `
@@ -633,8 +370,6 @@ function displayResults(result) {
         `;
         tableBody.appendChild(tr);
     });
-    
-    console.log('Предпросмотр отображен');
 }
 
 // Создание Excel файла
@@ -645,12 +380,8 @@ function downloadExcel() {
     }
     
     try {
-        console.log('Создание Excel файла...');
-        
-        // Создаем книгу Excel
         const wb = XLSX.utils.book_new();
         
-        // 1. Лист с коэффициентами
         const wsData = calculationResult.results.map(row => ({
             'Product ID': row.product_id,
             'Level 3': row.level3,
@@ -664,7 +395,6 @@ function downloadExcel() {
         const ws = XLSX.utils.json_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, 'Коэффициенты');
         
-        // 2. Лист со статистикой
         const statsData = [
             ['Показатель', 'Количество', 'Процент'],
             ['Всего товаров', calculationResult.statistics.total, '100%'],
@@ -681,27 +411,12 @@ function downloadExcel() {
         const wsStats = XLSX.utils.aoa_to_sheet(statsData);
         XLSX.utils.book_append_sheet(wb, wsStats, 'Статистика');
         
-        // 3. Лист с информацией
-        const infoData = [
-            ['Параметр', 'Значение'],
-            ['Дата создания', new Date().toLocaleString('ru-RU')],
-            ['Количество файлов DEMAND', demandFiles.length],
-            ['Количество файлов SWAT', swatFiles.length],
-            ['Всего обработано товаров', calculationResult.statistics.total]
-        ];
-        
-        const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-        XLSX.utils.book_append_sheet(wb, wsInfo, 'Информация');
-        
-        // Генерируем и скачиваем файл
         const filename = `coefficients_${new Date().toISOString().slice(0, 10)}.xlsx`;
         XLSX.writeFile(wb, filename);
         
-        console.log(`Файл ${filename} создан и скачан`);
         alert(`Файл ${filename} успешно скачан!`);
         
     } catch (error) {
-        console.error('Ошибка при создании Excel файла:', error);
         alert('Ошибка при создании Excel файла: ' + error.message);
     }
 }
@@ -745,35 +460,6 @@ function showDetails() {
     
     html += `
             </div>
-            <h3>Примеры корректировок</h3>
-            <div class="examples">
-    `;
-    
-    // Показываем несколько примеров корректировок
-    const examples = calculationResult.results
-        .filter(r => r.coefficient_raw !== r.coefficient_adjusted)
-        .slice(0, 5);
-    
-    if (examples.length > 0) {
-        examples.forEach((ex, i) => {
-            html += `
-                <div class="example-item">
-                    <div><strong>${ex.product_id}</strong></div>
-                    <div>${(ex.level3 || '').slice(0, 50)}...</div>
-                    <div class="example-values">
-                        <span class="coeff-raw">${ex.coefficient_raw.toFixed(2)}</span>
-                        <span> → </span>
-                        <span class="coeff-adj">${ex.coefficient_adjusted.toFixed(2)}</span>
-                    </div>
-                </div>
-            `;
-        });
-    } else {
-        html += '<p>Корректировки не применялись</p>';
-    }
-    
-    html += `
-            </div>
         </div>
     `;
     
@@ -786,36 +472,89 @@ function closeModal() {
     document.getElementById('detailsModal').style.display = 'none';
 }
 
-// Вспомогательная функция для анализа файла
-function analyzeFileStructure(file, callback) {
+// Дебаг функция
+window.debugFiles = function() {
+    console.clear();
+    console.log('=== DEBUG FILES ===');
+    console.log('DEMAND файлов:', demandFiles.length);
+    console.log('SWAT файлов:', swatFiles.length);
+    
+    if (demandFiles.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            console.log('\n=== DEMAND FILE CONTENT ===');
+            const text = e.target.result;
+            const lines = text.split('\n');
+            console.log('Всего строк:', lines.length);
+            console.log('Первые 5 строк:');
+            lines.slice(0, 5).forEach((line, i) => {
+                console.log(`${i}: ${line}`);
+            });
+        };
+        reader.readAsText(demandFiles[0]);
+    }
+    
+    if (swatFiles.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            console.log('\n=== SWAT FILE CONTENT ===');
+            const text = e.target.result;
+            const lines = text.split('\n');
+            console.log('Всего строк:', lines.length);
+            console.log('Первые 5 строк:');
+            lines.slice(0, 5).forEach((line, i) => {
+                console.log(`${i}: ${line}`);
+            });
+        };
+        reader.readAsText(swatFiles[0]);
+    }
+};
+
+// Тест чтения файла
+window.testReadFile = function() {
+    console.clear();
+    console.log('=== TEST FILE READ ===');
+    
+    const file = demandFiles[0] || swatFiles[0];
+    if (!file) {
+        console.log('Нет файлов для теста');
+        return;
+    }
+    
+    console.log('Тестируем файл:', file.name);
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         const text = e.target.result;
-        const lines = text.split('\n').slice(0, 10); // Первые 10 строк
-        const headers = lines[0] ? lines[0].split(';') : [];
+        console.log('Первые 500 символов:');
+        console.log(text.substring(0, 500));
         
-        console.log(`\n=== АНАЛИЗ ФАЙЛА ${file.name} ===`);
-        console.log('Заголовки:', headers);
-        console.log('Первые 5 строк данных:');
-        lines.slice(1, 6).forEach((line, i) => {
-            console.log(`Строка ${i + 1}:`, line);
-        });
-        
-        // Показываем все уникальные значения в колонке Measure Names
-        const measureNames = [];
-        lines.slice(1).forEach(line => {
-            const parts = line.split(';');
-            if (headers.includes('Measure Names')) {
-                const index = headers.indexOf('Measure Names');
-                if (parts[index]) {
-                    measureNames.push(parts[index]);
-                }
+        // Пробуем парсить
+        try {
+            const results = Papa.parse(text, {
+                delimiter: ';',
+                header: true,
+                skipEmptyLines: true,
+            });
+            
+            console.log('\n=== PAPAPARSE RESULTS ===');
+            console.log('Количество строк:', results.data.length);
+            
+            if (results.data.length > 0) {
+                console.log('Первая строка данных:', results.data[0]);
+                console.log('Ключи:', Object.keys(results.data[0]));
+                
+                // Показываем уникальные Measure Names
+                const measureNames = [...new Set(
+                    results.data.map(r => r['Measure Names']).filter(Boolean)
+                )];
+                console.log('Уникальные Measure Names:', measureNames);
             }
-        });
-        
-        console.log('Уникальные Measure Names:', [...new Set(measureNames)]);
-        
-        if (callback) callback(text);
+            
+        } catch (error) {
+            console.error('Ошибка парсинга:', error);
+        }
     };
-    reader.readAsText(file, 'UTF-8');
-}
+    
+    reader.readAsText(file);
+};
