@@ -132,6 +132,7 @@ function updateCalculateButton() {
 }
 
 // Основная функция расчета
+// Основная функция расчета
 async function calculateCoefficients() {
     try {
         console.log('=== НАЧАЛО РАСЧЕТА ===');
@@ -149,35 +150,53 @@ async function calculateCoefficients() {
         // Читаем файлы
         console.log('Чтение DEMAND файлов...');
         const demandData = await readCSVFiles(demandFiles, 'demand');
-        console.log(`DEMAND данных прочитано: ${demandData.length}`);
+        console.log(`DEMAND данных прочитано: ${demandData ? demandData.length : 'undefined'}`);
         
         console.log('Чтение SWAT файлов...');
         const swatData = await readCSVFiles(swatFiles, 'prediction_swat');
-        console.log(`SWAT данных прочитано: ${swatData.length}`);
+        console.log(`SWAT данных прочитано: ${swatData ? swatData.length : 'undefined'}`);
+        
+        // Проверяем что данные прочитаны
+        if (!demandData || !Array.isArray(demandData)) {
+            throw new Error('Ошибка чтения DEMAND файлов: данные не являются массивом');
+        }
+        if (!swatData || !Array.isArray(swatData)) {
+            throw new Error('Ошибка чтения SWAT файлов: данные не являются массивом');
+        }
         
         // Проверяем что есть данные
         if (demandData.length === 0) {
-            throw new Error('Не удалось прочитать данные DEMAND. Проверьте формат файлов.');
+            throw new Error('Не удалось прочитать данные DEMAND. Возможные причины:\n' +
+                          '1. В файлах нет строк с Measure Names = "demand"\n' +
+                          '2. Файлы имеют неправильную структуру\n' +
+                          '3. Разделитель в CSV файле не ";"');
         }
         if (swatData.length === 0) {
-            throw new Error('Не удалось прочитать данные SWAT. Проверьте формат файлов.');
+            throw new Error('Не удалось прочитать данные SWAT. Возможные причины:\n' +
+                          '1. В файлах нет строк с Measure Names = "prediction_swat"\n' +
+                          '2. Файлы имеют неправильную структуру\n' +
+                          '3. Разделитель в CSV файле не ";"');
         }
         
         // Обрабатываем данные
         console.log('Обработка DEMAND данных...');
         const processedDemand = processData(demandData, 'demand_sum');
-        console.log(`Обработано DEMAND записей: ${processedDemand.length}`);
+        console.log(`Обработано DEMAND записей: ${processedDemand ? processedDemand.length : 'undefined'}`);
         
         console.log('Обработка SWAT данных...');
         const processedSwat = processData(swatData, 'swat_sum');
-        console.log(`Обработано SWAT записей: ${processedSwat.length}`);
+        console.log(`Обработано SWAT записей: ${processedSwat ? processedSwat.length : 'undefined'}`);
         
         // Проверяем что есть обработанные данные
-        if (processedDemand.length === 0) {
-            throw new Error('Не удалось обработать данные DEMAND. Проверьте структуру файлов.');
+        if (!processedDemand || processedDemand.length === 0) {
+            console.log('Пример DEMAND данных:', demandData.slice(0, 3));
+            throw new Error('Не удалось обработать данные DEMAND. Проверьте структуру файлов.\n' +
+                          'Убедитесь что файлы содержат колонки: level 1, level 4, value');
         }
-        if (processedSwat.length === 0) {
-            throw new Error('Не удалось обработать данные SWAT. Проверьте структуру файлов.');
+        if (!processedSwat || processedSwat.length === 0) {
+            console.log('Пример SWAT данных:', swatData.slice(0, 3));
+            throw new Error('Не удалось обработать данные SWAT. Проверьте структуру файлов.\n' +
+                          'Убедитесь что файлы содержат колонки: level 1, level 4, value');
         }
         
         // Рассчитываем коэффициенты
@@ -207,14 +226,19 @@ async function calculateCoefficients() {
         console.error('Сообщение:', error.message);
         console.error('Стек:', error.stack);
         
+        // Детальная информация о состоянии
+        console.log('Состояние demandFiles:', demandFiles.length, demandFiles);
+        console.log('Состояние swatFiles:', swatFiles.length, swatFiles);
+        
         let errorMessage = 'Ошибка при расчете: ' + error.message;
         
         // Добавляем дополнительные подсказки
-        if (error.message.includes('undefined')) {
-            errorMessage += '\n\nВозможные причины:';
-            errorMessage += '\n1. Файлы имеют неправильную структуру';
-            errorMessage += '\n2. Отсутствуют необходимые колонки';
-            errorMessage += '\n3. Неправильный разделитель в CSV файле';
+        if (error.message.includes('undefined') || error.message.includes('length')) {
+            errorMessage += '\n\n⚠️ Проверьте:';
+            errorMessage += '\n1. Правильность формата CSV файлов';
+            errorMessage += '\n2. Наличие столбца "Measure Names" в файлах';
+            errorMessage += '\n3. Значения в столбце Measure Names: "demand" или "prediction_swat"';
+            errorMessage += '\n4. Разделитель должен быть ";" (точка с запятой)';
             errorMessage += '\n\nНажмите кнопку "Debug" для просмотра содержимого файлов.';
         }
         
@@ -231,22 +255,38 @@ async function calculateCoefficients() {
 }
 
 // Чтение CSV файлов
+// Чтение CSV файлов
 function readCSVFiles(files, measureName) {
     return new Promise((resolve, reject) => {
-        const allData = [];
-        let filesRead = 0;
-        
-        if (files.length === 0) {
+        if (!files || files.length === 0) {
             reject(new Error(`Нет файлов для ${measureName}`));
             return;
         }
         
-        files.forEach(file => {
+        const allData = [];
+        let filesRead = 0;
+        let errors = [];
+        
+        files.forEach((file, fileIndex) => {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const text = e.target.result;
-                    console.log(`Чтение файла ${file.name} для ${measureName}`);
+                    console.log(`\n=== Чтение файла ${file.name} (${fileIndex + 1}/${files.length}) ===`);
+                    console.log(`Размер: ${text.length} символов`);
+                    
+                    // Проверяем первые 500 символов файла
+                    const preview = text.substring(0, Math.min(500, text.length));
+                    console.log('Препросмотр файла:', preview);
+                    
+                    // Разделяем на строки для анализа
+                    const lines = text.split('\n');
+                    console.log(`Всего строк: ${lines.length}`);
+                    
+                    if (lines.length > 0) {
+                        console.log('Первая строка (заголовки):', lines[0]);
+                        console.log('Вторая строка (данные):', lines[1] || 'нет данных');
+                    }
                     
                     // Используем PapaParse для парсинга CSV
                     const results = Papa.parse(text, {
@@ -259,55 +299,95 @@ function readCSVFiles(files, measureName) {
                                 return value.replace(',', '.');
                             }
                             return value;
+                        },
+                        error: function(err) {
+                            console.error(`Ошибка PapaParse в файле ${file.name}:`, err);
+                            errors.push(`Файл ${file.name}: ${err.message}`);
                         }
                     });
+                    
+                    console.log(`Статус парсинга: ${results.errors.length > 0 ? 'с ошибками' : 'успешно'}`);
+                    if (results.errors.length > 0) {
+                        console.warn('Ошибки парсинга:', results.errors);
+                    }
                     
                     console.log(`Найдено строк: ${results.data.length}`);
                     
+                    // Показываем все уникальные значения Measure Names в файле
+                    const allMeasureNames = [...new Set(results.data.map(r => r['Measure Names']).filter(Boolean))];
+                    console.log(`Все Measure Names в файле:`, allMeasureNames);
+                    
                     // Фильтруем по Measure Names
                     const filtered = results.data.filter(row => {
-                        // Проверяем наличие поля 'Measure Names'
-                        if (!row['Measure Names']) {
-                            console.warn('Строка без Measure Names:', row);
+                        const measureValue = row['Measure Names'];
+                        if (!measureValue) {
                             return false;
                         }
-                        const measureValue = row['Measure Names'];
-                        const isMatch = measureValue === measureName;
-                        if (!isMatch) {
-                            console.log(`Пропущена строка: ${measureValue} !== ${measureName}`);
-                        }
-                        return isMatch;
+                        // Приводим к нижнему регистру для надежности
+                        return measureValue.toLowerCase() === measureName.toLowerCase();
                     });
                     
-                    console.log(`Отфильтровано для ${measureName}: ${filtered.length}`);
+                    console.log(`Отфильтровано для "${measureName}": ${filtered.length}`);
                     
-                    // Дебаг: посмотрим первую строку
-                    if (filtered.length > 0) {
-                        console.log('Первая строка данных:', filtered[0]);
-                        console.log('Ключи первой строки:', Object.keys(filtered[0]));
+                    if (filtered.length === 0) {
+                        console.warn(`ВНИМАНИЕ: Не найдено данных для "${measureName}" в файле ${file.name}`);
+                        console.log(`Доступные значения Measure Names: ${allMeasureNames.join(', ')}`);
                     } else {
-                        console.warn(`Не найдено данных для ${measureName} в файле ${file.name}`);
-                        console.log('Примеры Measure Names в файле:', 
-                            results.data.slice(0, 5).map(r => r['Measure Names']).filter(Boolean));
+                        // Дебаг: посмотрим первую строку отфильтрованных данных
+                        console.log('Пример отфильтрованной строки:', filtered[0]);
+                        console.log('Ключи строки:', Object.keys(filtered[0]));
+                        
+                        // Проверяем наличие необходимых колонок
+                        const requiredColumns = ['level 1', 'level 4'];
+                        const missingColumns = requiredColumns.filter(col => !filtered[0][col]);
+                        if (missingColumns.length > 0) {
+                            console.warn(`Отсутствуют колонки: ${missingColumns.join(', ')}`);
+                        }
                     }
                     
                     allData.push(...filtered);
                     
-                    filesRead++;
-                    if (filesRead === files.length) {
-                        console.log(`Всего данных для ${measureName}: ${allData.length}`);
+                } catch (error) {
+                    console.error(`Критическая ошибка при обработке файла ${file.name}:`, error);
+                    errors.push(`Файл ${file.name}: ${error.message}`);
+                }
+                
+                filesRead++;
+                if (filesRead === files.length) {
+                    console.log(`\n=== ИТОГИ для ${measureName} ===`);
+                    console.log(`Прочитано файлов: ${filesRead}`);
+                    console.log(`Всего строк данных: ${allData.length}`);
+                    console.log(`Ошибок: ${errors.length}`);
+                    
+                    if (errors.length > 0) {
+                        console.warn('Список ошибок:', errors);
+                    }
+                    
+                    if (allData.length === 0 && errors.length === 0) {
+                        reject(new Error(`Не найдено данных с Measure Names = "${measureName}" в загруженных файлах.\n` +
+                                       `Проверьте что в файлах есть колонка "Measure Names" со значением "${measureName}"`));
+                    } else if (allData.length === 0) {
+                        reject(new Error(`Не удалось прочитать данные:\n${errors.join('\n')}`));
+                    } else {
                         resolve(allData);
                     }
-                } catch (error) {
-                    console.error('Ошибка при парсинге файла:', error);
-                    console.error('Файл:', file.name);
-                    reject(new Error(`Ошибка парсинга файла ${file.name}: ${error.message}`));
                 }
             };
+            
             reader.onerror = function(e) {
-                console.error('Ошибка чтения файла:', e);
-                reject(new Error(`Не удалось прочитать файл ${file.name}`));
+                console.error(`Ошибка чтения файла ${file.name}:`, e);
+                errors.push(`Файл ${file.name}: ошибка чтения`);
+                filesRead++;
+                
+                if (filesRead === files.length) {
+                    if (allData.length === 0) {
+                        reject(new Error(`Не удалось прочитать файлы:\n${errors.join('\n')}`));
+                    } else {
+                        resolve(allData);
+                    }
+                }
             };
+            
             reader.readAsText(file, 'UTF-8');
         });
     });
@@ -704,4 +784,38 @@ function showDetails() {
 // Закрыть модальное окно
 function closeModal() {
     document.getElementById('detailsModal').style.display = 'none';
+}
+
+// Вспомогательная функция для анализа файла
+function analyzeFileStructure(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n').slice(0, 10); // Первые 10 строк
+        const headers = lines[0] ? lines[0].split(';') : [];
+        
+        console.log(`\n=== АНАЛИЗ ФАЙЛА ${file.name} ===`);
+        console.log('Заголовки:', headers);
+        console.log('Первые 5 строк данных:');
+        lines.slice(1, 6).forEach((line, i) => {
+            console.log(`Строка ${i + 1}:`, line);
+        });
+        
+        // Показываем все уникальные значения в колонке Measure Names
+        const measureNames = [];
+        lines.slice(1).forEach(line => {
+            const parts = line.split(';');
+            if (headers.includes('Measure Names')) {
+                const index = headers.indexOf('Measure Names');
+                if (parts[index]) {
+                    measureNames.push(parts[index]);
+                }
+            }
+        });
+        
+        console.log('Уникальные Measure Names:', [...new Set(measureNames)]);
+        
+        if (callback) callback(text);
+    };
+    reader.readAsText(file, 'UTF-8');
 }
