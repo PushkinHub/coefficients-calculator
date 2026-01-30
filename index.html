@@ -218,38 +218,61 @@
     <script src="script.js"></script>
     <script>
     // Функция для дебага
-    function debugFiles() {
-        console.log('=== DEBUG INFO ===');
-        console.log('DEMAND файлы:', demandFiles);
-        console.log('SWAT файлы:', swatFiles);
-        
-        // Читаем и показываем содержимое первого файла
-        if (demandFiles.length > 0) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                console.log('=== Содержимое DEMAND файла ===');
-                console.log(e.target.result.substring(0, 500));
-                const lines = e.target.result.split('\n');
-                console.log('Первые 5 строк:');
-                lines.slice(0, 5).forEach((line, i) => console.log(`${i}: ${line}`));
-                console.log('Заголовки:', lines[0]);
-            };
-            reader.readAsText(demandFiles[0]);
-        }
-        
-        if (swatFiles.length > 0) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                console.log('=== Содержимое SWAT файла ===');
-                console.log(e.target.result.substring(0, 500));
-                const lines = e.target.result.split('\n');
-                console.log('Первые 5 строк:');
-                lines.slice(0, 5).forEach((line, i) => console.log(`${i}: ${line}`));
-                console.log('Заголовки:', lines[0]);
-            };
-            reader.readAsText(swatFiles[0]);
-        }
+    <script>
+// Функция для дебага
+function debugFiles() {
+    console.clear();
+    console.log('=== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ О ФАЙЛАХ ===');
+    
+    if (demandFiles.length > 0) {
+        console.log('\n--- DEMAND файлы ---');
+        demandFiles.forEach((file, i) => {
+            console.log(`${i + 1}. ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+            analyzeFileStructure(file);
+        });
+    } else {
+        console.log('Нет DEMAND файлов');
+    }
+    
+    if (swatFiles.length > 0) {
+        console.log('\n--- SWAT файлы ---');
+        swatFiles.forEach((file, i) => {
+            console.log(`${i + 1}. ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+            analyzeFileStructure(file);
+        });
+    } else {
+        console.log('Нет SWAT файлов');
+    }
+    
+    // Попробуем прочитать файлы с минимальной обработкой
+    console.log('\n=== ТЕСТОВОЕ ЧТЕНИЕ ФАЙЛОВ ===');
+    
+    if (demandFiles.length > 0) {
+        const testReader = new FileReader();
+        testReader.onload = function(e) {
+            console.log('\n--- Содержимое DEMAND файла ---');
+            const text = e.target.result;
+            const lines = text.split('\n');
+            console.log('Первые 10 строк DEMAND файла:');
+            lines.slice(0, 10).forEach((line, i) => {
+                console.log(`${i}: ${line}`);
+            });
+            
+            // Показываем разделители
+            const firstLine = lines[0] || '';
+            const secondLine = lines[1] || '';
+            console.log('\nАнализ структуры DEMAND:');
+            console.log('Длина первой строки:', firstLine.length);
+            console.log('Разделитель ";" найдено:', (firstLine.match(/;/g) || []).length);
+            console.log('Разделитель "," найдено:', (firstLine.match(/,/g) || []).length);
+            console.log('Разделитель "\t" найдено:', (firstLine.match(/\t/g) || []).length);
+        };
+        testReader.readAsText(demandFiles[0]);
+    }
+}
+</script>
     }
     </script>
 </body>
 </html>
+
