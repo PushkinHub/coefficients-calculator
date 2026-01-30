@@ -209,9 +209,12 @@
     </div>
 
     <!-- Дебаг кнопка -->
-    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;">
-        <button onclick="debugFiles()" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px;">
-            Debug
+    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 5px;">
+        <button onclick="debugFiles()" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;">
+            🔍 Debug Files
+        </button>
+        <button onclick="testReadFile()" style="background: #44aa44; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;">
+            📄 Test Read
         </button>
     </div>
 
@@ -275,4 +278,5 @@ function debugFiles() {
     </script>
 </body>
 </html>
+
 
