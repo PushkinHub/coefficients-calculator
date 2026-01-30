@@ -44,15 +44,19 @@
 
         <div class="upload-section">
             <h2>📁 Загрузка файлов</h2>
+            <p class="section-description">Загрузите CSV файлы с данными. Пример структуры файлов:</p>
             
             <div class="file-types">
                 <div class="file-type">
                     <h3>Файлы DEMAND</h3>
                     <p>CSV файлы с историческими данными спроса</p>
-                    <p class="example-link">
-                        <a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=f258f86c1287" target="_blank">
-                            📋 Пример структуры файла DEMAND
-                        </a>
+                    <p class="file-requirements">
+                        <strong>Обязательные колонки:</strong><br>
+                        Measure Names;level 1;level 2;level 3;level 4;date_scale;value
+                    </p>
+                    <p class="file-example">
+                        <strong>Пример строки:</strong><br>
+                        <code>demand;Москва;Готовые блюда;Шницель;10000100;19.01.2026;3530</code>
                     </p>
                     <div class="file-upload-area" id="demandUploadArea">
                         <input type="file" id="demandFiles" accept=".csv" multiple style="display: none;">
@@ -63,6 +67,7 @@
                                 <line x1="12" y1="3" x2="12" y2="15"></line>
                             </svg>
                             <p>Перетащите файлы DEMAND сюда или нажмите для выбора</p>
+                            <p class="file-format">Формат: CSV с разделителем ";"</p>
                         </div>
                         <div class="file-list" id="demandFileList"></div>
                     </div>
@@ -74,10 +79,13 @@
                 <div class="file-type">
                     <h3>Файлы SWAT</h3>
                     <p>CSV файлы с прогнозными данными SWAT</p>
-                    <p class="example-link">
-                        <a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=81d9908b1227" target="_blank">
-                            📋 Пример структуры файла SWAT
-                        </a>
+                    <p class="file-requirements">
+                        <strong>Обязательные колонки:</strong><br>
+                        Measure Names;level 1;level 2;level 3;level 4;date_scale;value
+                    </p>
+                    <p class="file-example">
+                        <strong>Пример строки:</strong><br>
+                        <code>prediction_swat;Москва;Готовые блюда;Шницель;10000100;02.02.2026;3030</code>
                     </p>
                     <div class="file-upload-area" id="swatUploadArea">
                         <input type="file" id="swatFiles" accept=".csv" multiple style="display: none;">
@@ -88,6 +96,7 @@
                                 <line x1="12" y1="3" x2="12" y2="15"></line>
                             </svg>
                             <p>Перетащите файлы SWAT сюда или нажмите для выбора</p>
+                            <p class="file-format">Формат: CSV с разделителем ";"</p>
                         </div>
                         <div class="file-list" id="swatFileList"></div>
                     </div>
@@ -208,75 +217,16 @@
         </div>
     </div>
 
-    <!-- Дебаг кнопка -->
-    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 5px;">
-        <button onclick="debugFiles()" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;">
-            🔍 Debug Files
+    <!-- Дебаг панель -->
+    <div class="debug-panel">
+        <button onclick="debugFiles()" title="Debug файлов">
+            🔍 Debug
         </button>
-        <button onclick="testReadFile()" style="background: #44aa44; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;">
-            📄 Test Read
+        <button onclick="testFileRead()" title="Тест чтения файла">
+            📄 Test
         </button>
     </div>
 
     <script src="script.js"></script>
-    <script>
-    // Функция для дебага
-    <script>
-// Функция для дебага
-function debugFiles() {
-    console.clear();
-    console.log('=== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ О ФАЙЛАХ ===');
-    
-    if (demandFiles.length > 0) {
-        console.log('\n--- DEMAND файлы ---');
-        demandFiles.forEach((file, i) => {
-            console.log(`${i + 1}. ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-            analyzeFileStructure(file);
-        });
-    } else {
-        console.log('Нет DEMAND файлов');
-    }
-    
-    if (swatFiles.length > 0) {
-        console.log('\n--- SWAT файлы ---');
-        swatFiles.forEach((file, i) => {
-            console.log(`${i + 1}. ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
-            analyzeFileStructure(file);
-        });
-    } else {
-        console.log('Нет SWAT файлов');
-    }
-    
-    // Попробуем прочитать файлы с минимальной обработкой
-    console.log('\n=== ТЕСТОВОЕ ЧТЕНИЕ ФАЙЛОВ ===');
-    
-    if (demandFiles.length > 0) {
-        const testReader = new FileReader();
-        testReader.onload = function(e) {
-            console.log('\n--- Содержимое DEMAND файла ---');
-            const text = e.target.result;
-            const lines = text.split('\n');
-            console.log('Первые 10 строк DEMAND файла:');
-            lines.slice(0, 10).forEach((line, i) => {
-                console.log(`${i}: ${line}`);
-            });
-            
-            // Показываем разделители
-            const firstLine = lines[0] || '';
-            const secondLine = lines[1] || '';
-            console.log('\nАнализ структуры DEMAND:');
-            console.log('Длина первой строки:', firstLine.length);
-            console.log('Разделитель ";" найдено:', (firstLine.match(/;/g) || []).length);
-            console.log('Разделитель "," найдено:', (firstLine.match(/,/g) || []).length);
-            console.log('Разделитель "\t" найдено:', (firstLine.match(/\t/g) || []).length);
-        };
-        testReader.readAsText(demandFiles[0]);
-    }
-}
-</script>
-    }
-    </script>
 </body>
 </html>
-
-
