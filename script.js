@@ -60,24 +60,14 @@ function setupFileUpload(inputId, dropAreaId, fileListId, filesArray) {
 
 // Обработка файлов
 function handleFiles(files, filesArray, fileList) {
-    console.log(`Получено файлов: ${files.length}`);
-    
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        console.log(`Файл ${i}: ${file.name}, тип: ${file.type}, размер: ${file.size} байт`);
-        
         if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
             if (filesArray.length < 10) {
                 filesArray.push(file);
-                console.log(`Добавлен файл: ${file.name}`);
-            } else {
-                console.log(`Пропущен файл ${file.name}: превышено максимальное количество файлов`);
             }
-        } else {
-            console.warn(`Пропущен файл ${file.name}: не CSV формат`);
         }
     }
-    
     updateFileList(fileList, filesArray);
     updateCalculateButton();
 }
@@ -143,12 +133,12 @@ async function calculateCoefficients() {
         const demandData = await readCSVFiles(demandFiles, 'demand');
         const swatData = await readCSVFiles(swatFiles, 'prediction_swat');
         
-        // Обрабатываем данные
-        const processedDemand = processData(demandData, 'demand_sum');
-        const processedSwat = processData(swatData, 'swat_sum');
+        // Обрабатываем данные (как в Python)
+        const processedDemand = processDataPythonStyle(demandData, 'demand_sum');
+        const processedSwat = processDataPythonStyle(swatData, 'swat_sum');
         
         // Рассчитываем коэффициенты
-        calculationResult = calculate(processedDemand, processedSwat);
+        calculationResult = calculateCoefficientsPythonStyle(processedDemand, processedSwat);
         
         // Отображаем результаты
         displayResults(calculationResult);
@@ -163,9 +153,11 @@ async function calculateCoefficients() {
             }, 1000);
         }
         
+        console.log('=== РАСЧЕТ УСПЕШНО ЗАВЕРШЕН ===');
+        
     } catch (error) {
-        console.error('Ошибка:', error);
-        alert('Ошибка при расчете: ' + error.message + '\n\nНажмите "Debug Files" для анализа файлов.');
+        console.error('Ошибка расчета:', error);
+        alert('Ошибка при расчете: ' + error.message + '\n\nПроверьте консоль (F12) для подробностей.');
     } finally {
         // Восстанавливаем кнопку
         const btn = document.getElementById('calculateBtn');
@@ -177,7 +169,7 @@ async function calculateCoefficients() {
     }
 }
 
-// Чтение CSV файлов
+// Чтение CSV файлов (адаптировано под Python структуру)
 function readCSVFiles(files, measureName) {
     return new Promise((resolve, reject) => {
         if (!files || files.length === 0) {
@@ -194,22 +186,31 @@ function readCSVFiles(files, measureName) {
                 try {
                     const text = e.target.result;
                     
-                    // Используем PapaParse
+                    // Используем PapaParse для парсинга CSV
                     const results = Papa.parse(text, {
                         delimiter: ';',
                         header: true,
                         skipEmptyLines: true,
+                        transform: (value) => {
+                            // Заменяем запятые на точки в числах
+                            if (value && typeof value === 'string' && value.includes(',')) {
+                                return value.replace(',', '.');
+                            }
+                            return value;
+                        }
                     });
                     
-                    // Фильтруем по Measure Names
+                    // Фильтруем по Measure Names (как в Python)
                     const filtered = results.data.filter(row => {
-                        return row['Measure Names'] === measureName;
+                        if (!row['Measure Names']) return false;
+                        // Приводим к нижнему регистру для надежности
+                        return row['Measure Names'].toLowerCase() === measureName.toLowerCase();
                     });
                     
                     allData.push(...filtered);
                     
                 } catch (error) {
-                    console.error('Ошибка парсинга:', error);
+                    console.error('Ошибка парсинга файла', file.name, error);
                 }
                 
                 filesRead++;
@@ -217,6 +218,7 @@ function readCSVFiles(files, measureName) {
                     if (allData.length === 0) {
                         reject(new Error(`Не найдено данных с Measure Names = "${measureName}"`));
                     } else {
+                        console.log(`Для ${measureName} загружено ${allData.length} строк`);
                         resolve(allData);
                     }
                 }
@@ -228,38 +230,62 @@ function readCSVFiles(files, measureName) {
     });
 }
 
-// Обработка данных
-function processData(data, sumColumn) {
+// Обработка данных как в Python
+function processDataPythonStyle(data, sumColumn) {
+    console.log(`Обработка ${data.length} строк для ${sumColumn}`);
+    
     const grouped = {};
     
     data.forEach(row => {
-        const productId = (row['level 1'] || '') + (row['level 4'] || '');
-        
-        if (!productId) return;
-        
-        if (!grouped[productId]) {
-            grouped[productId] = {
-                product_id: productId,
-                level1: row['level 1'],
-                level2: row['level 2'],
-                level3: row['level 3'],
-                level4: row['level 4'],
-                sum: 0,
-            };
+        try {
+            // Создаем уникальный идентификатор товара как в Python
+            const level1 = (row['level 1'] || '').toString().trim().replace(/\s+/g, '');
+            const level4 = (row['level 4'] || '').toString().trim().replace(/\.0$/, '');
+            const productId = level1 + level4;
+            
+            if (!productId) return;
+            
+            if (!grouped[productId]) {
+                grouped[productId] = {
+                    product_id: productId,
+                    level1: row['level 1'],
+                    level2: row['level 2'],
+                    level3: row['level 3'],
+                    level4: row['level 4'],
+                    sum: 0
+                };
+            }
+            
+            // Преобразуем значение в число (ищем в последней колонке как в Python)
+            let value = 0;
+            const keys = Object.keys(row);
+            const lastCol = keys[keys.length - 1];
+            
+            if (lastCol && lastCol !== 'Measure Names') {
+                value = parseFloat(row[lastCol]) || 0;
+            }
+            
+            grouped[productId].sum += value;
+            
+        } catch (error) {
+            console.error('Ошибка обработки строки:', error, row);
         }
-        
-        const value = parseFloat(row['value'] || '0');
-        grouped[productId].sum += value;
     });
     
-    return Object.values(grouped).map(item => ({
+    const result = Object.values(grouped).map(item => ({
         ...item,
         [sumColumn]: item.sum
     }));
+    
+    console.log(`Сгруппировано ${result.length} товаров для ${sumColumn}`);
+    return result;
 }
 
-// Расчет коэффициентов
-function calculate(demandData, swatData) {
+// Расчет коэффициентов как в Python
+function calculateCoefficientsPythonStyle(demandData, swatData) {
+    console.log('Расчет коэффициентов по Python-логике...');
+    
+    // Создаем мапы для быстрого доступа
     const demandMap = new Map();
     demandData.forEach(item => {
         demandMap.set(item.product_id, item);
@@ -270,6 +296,7 @@ function calculate(demandData, swatData) {
         swatMap.set(item.product_id, item);
     });
     
+    // Объединяем все product_id
     const allProductIds = new Set([
         ...demandData.map(d => d.product_id),
         ...swatData.map(s => s.product_id)
@@ -284,25 +311,33 @@ function calculate(demandData, swatData) {
         const demandSum = demand ? demand.demand_sum : 0;
         const swatSum = swat ? swat.swat_sum : 0;
         
-        const demandRounded = Math.round(demandSum);
-        const swatRounded = Math.round(swatSum);
-        
-        let coefficientRaw = 0;
-        if (swatRounded !== 0) {
-            coefficientRaw = demandRounded / swatRounded;
+        // Вычисляем исходный коэффициент
+        let coefficientExact = 0;
+        if (swatSum !== 0) {
+            coefficientExact = demandSum / swatSum;
         }
         
-        coefficientRaw = Math.round(coefficientRaw * 100) / 100;
+        // ШАГ 1: Округляем до 2 знаков после запятой
+        let coefficientRaw = Math.round(coefficientExact * 100) / 100;
         
+        // ШАГ 2: Применяем правила корректировки
         let coefficientAdjusted = coefficientRaw;
+        let adjustmentType = 'none';
         
         if (coefficientRaw >= 0.96 && coefficientRaw <= 1.04) {
             coefficientAdjusted = 1.00;
+            adjustmentType = 'range';
         } else if (coefficientRaw < 0.8) {
             coefficientAdjusted = 0.80;
+            adjustmentType = 'min';
         } else if (coefficientRaw > 1.5) {
             coefficientAdjusted = 1.50;
+            adjustmentType = 'max';
         }
+        
+        // Округляем суммы (математическое округление)
+        const demandRounded = Math.round(demandSum);
+        const swatRounded = Math.round(swatSum);
         
         results.push({
             product_id: productId,
@@ -311,12 +346,11 @@ function calculate(demandData, swatData) {
             coefficient_adjusted: coefficientAdjusted,
             demand_sum: demandRounded,
             swat_sum: swatRounded,
-            adjustment_type: coefficientRaw !== coefficientAdjusted ? 
-                (coefficientRaw >= 0.96 && coefficientRaw <= 1.04 ? 'range' :
-                 coefficientRaw < 0.8 ? 'min' : 'max') : 'none'
+            adjustment_type: adjustmentType
         });
     });
     
+    // Сортируем по product_id
     results.sort((a, b) => a.product_id.localeCompare(b.product_id));
     
     return {
@@ -344,20 +378,27 @@ function calculateStatistics(results) {
 function displayResults(result) {
     const stats = result.statistics;
     
+    // Обновляем статистику
     document.getElementById('totalProducts').textContent = stats.total;
     document.getElementById('coeff100').textContent = stats.coeff_100;
     document.getElementById('coeff08').textContent = stats.coeff_08;
     document.getElementById('coeff15').textContent = stats.coeff_15;
     
+    // Заполняем таблицу предпросмотра
     const tableBody = document.querySelector('#previewTable tbody');
     tableBody.innerHTML = '';
     
     result.results.slice(0, 10).forEach(row => {
         const tr = document.createElement('tr');
         
+        // Определяем маркер как в Python
         let marker = '';
         if (row.coefficient_raw !== row.coefficient_adjusted) {
-            marker = row.coefficient_raw >= 0.96 && row.coefficient_raw <= 1.04 ? '*' : '**';
+            if (row.coefficient_raw >= 0.96 && row.coefficient_raw <= 1.04) {
+                marker = '*';
+            } else {
+                marker = '**';
+            }
         }
         
         tr.innerHTML = `
@@ -380,8 +421,10 @@ function downloadExcel() {
     }
     
     try {
+        // Создаем книгу Excel
         const wb = XLSX.utils.book_new();
         
+        // 1. Лист с коэффициентами
         const wsData = calculationResult.results.map(row => ({
             'Product ID': row.product_id,
             'Level 3': row.level3,
@@ -395,6 +438,7 @@ function downloadExcel() {
         const ws = XLSX.utils.json_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, 'Коэффициенты');
         
+        // 2. Лист со статистикой
         const statsData = [
             ['Показатель', 'Количество', 'Процент'],
             ['Всего товаров', calculationResult.statistics.total, '100%'],
@@ -411,6 +455,20 @@ function downloadExcel() {
         const wsStats = XLSX.utils.aoa_to_sheet(statsData);
         XLSX.utils.book_append_sheet(wb, wsStats, 'Статистика');
         
+        // 3. Лист с информацией
+        const infoData = [
+            ['Параметр', 'Значение'],
+            ['Дата создания', new Date().toLocaleString('ru-RU')],
+            ['Количество файлов DEMAND', demandFiles.length],
+            ['Количество файлов SWAT', swatFiles.length],
+            ['Всего обработано товаров', calculationResult.statistics.total],
+            ['Версия приложения', '1.0 (адаптировано из Python)']
+        ];
+        
+        const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+        XLSX.utils.book_append_sheet(wb, wsInfo, 'Информация');
+        
+        // Генерируем и скачиваем файл
         const filename = `coefficients_${new Date().toISOString().slice(0, 10)}.xlsx`;
         XLSX.writeFile(wb, filename);
         
@@ -418,6 +476,7 @@ function downloadExcel() {
         
     } catch (error) {
         alert('Ошибка при создании Excel файла: ' + error.message);
+        console.error(error);
     }
 }
 
@@ -472,6 +531,8 @@ function closeModal() {
     document.getElementById('detailsModal').style.display = 'none';
 }
 
+// ==================== DEBUG ФУНКЦИИ ====================
+
 // Дебаг функция
 window.debugFiles = function() {
     console.clear();
@@ -482,14 +543,8 @@ window.debugFiles = function() {
     if (demandFiles.length > 0) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            console.log('\n=== DEMAND FILE CONTENT ===');
-            const text = e.target.result;
-            const lines = text.split('\n');
-            console.log('Всего строк:', lines.length);
-            console.log('Первые 5 строк:');
-            lines.slice(0, 5).forEach((line, i) => {
-                console.log(`${i}: ${line}`);
-            });
+            console.log('\n=== DEMAND FILE STRUCTURE ===');
+            analyzeFileStructure(e.target.result, 'demand');
         };
         reader.readAsText(demandFiles[0]);
     }
@@ -497,21 +552,15 @@ window.debugFiles = function() {
     if (swatFiles.length > 0) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            console.log('\n=== SWAT FILE CONTENT ===');
-            const text = e.target.result;
-            const lines = text.split('\n');
-            console.log('Всего строк:', lines.length);
-            console.log('Первые 5 строк:');
-            lines.slice(0, 5).forEach((line, i) => {
-                console.log(`${i}: ${line}`);
-            });
+            console.log('\n=== SWAT FILE STRUCTURE ===');
+            analyzeFileStructure(e.target.result, 'prediction_swat');
         };
         reader.readAsText(swatFiles[0]);
     }
 };
 
 // Тест чтения файла
-window.testReadFile = function() {
+window.testFileRead = function() {
     console.clear();
     console.log('=== TEST FILE READ ===');
     
@@ -521,40 +570,91 @@ window.testReadFile = function() {
         return;
     }
     
-    console.log('Тестируем файл:', file.name);
-    
     const reader = new FileReader();
     reader.onload = function(e) {
         const text = e.target.result;
-        console.log('Первые 500 символов:');
-        console.log(text.substring(0, 500));
+        console.log('=== RAW FILE ANALYSIS ===');
+        console.log('Файл:', file.name);
+        console.log('Размер:', text.length, 'символов');
         
-        // Пробуем парсить
-        try {
-            const results = Papa.parse(text, {
-                delimiter: ';',
-                header: true,
-                skipEmptyLines: true,
-            });
+        const lines = text.split('\n');
+        console.log('Всего строк:', lines.length);
+        
+        if (lines.length > 0) {
+            console.log('Первая строка (заголовки):', lines[0]);
             
-            console.log('\n=== PAPAPARSE RESULTS ===');
-            console.log('Количество строк:', results.data.length);
+            // Проверяем структуру
+            const delimiter = detectDelimiter(lines[0]);
+            console.log('Разделитель:', delimiter);
             
-            if (results.data.length > 0) {
-                console.log('Первая строка данных:', results.data[0]);
-                console.log('Ключи:', Object.keys(results.data[0]));
+            if (lines.length > 1) {
+                console.log('Вторая строка (данные):', lines[1]);
                 
-                // Показываем уникальные Measure Names
-                const measureNames = [...new Set(
-                    results.data.map(r => r['Measure Names']).filter(Boolean)
-                )];
-                console.log('Уникальные Measure Names:', measureNames);
+                const headers = lines[0].split(delimiter);
+                const data = lines[1].split(delimiter);
+                
+                console.log('Структура строки:');
+                headers.forEach((header, i) => {
+                    console.log(`  ${header}: ${data[i] || '(пусто)'}`);
+                });
             }
-            
-        } catch (error) {
-            console.error('Ошибка парсинга:', error);
         }
     };
-    
     reader.readAsText(file);
 };
+
+// Вспомогательные функции для дебага
+function analyzeFileStructure(text, expectedMeasure) {
+    const lines = text.split('\n');
+    console.log('Всего строк:', lines.length);
+    
+    if (lines.length > 0) {
+        const delimiter = detectDelimiter(lines[0]);
+        console.log('Разделитель:', delimiter);
+        
+        const headers = lines[0].split(delimiter);
+        console.log('Заголовки:', headers);
+        
+        // Проверяем наличие обязательных колонок
+        const required = ['Measure Names', 'level 1', 'level 2', 'level 3', 'level 4'];
+        const missing = required.filter(col => !headers.includes(col));
+        if (missing.length > 0) {
+            console.warn('Отсутствуют колонки:', missing);
+        }
+        
+        // Анализируем Measure Names
+        const measureNames = [];
+        for (let i = 1; i < Math.min(10, lines.length); i++) {
+            if (lines[i].trim()) {
+                const parts = lines[i].split(delimiter);
+                const measureIndex = headers.indexOf('Measure Names');
+                if (measureIndex !== -1 && parts[measureIndex]) {
+                    measureNames.push(parts[measureIndex]);
+                }
+            }
+        }
+        
+        console.log('Уникальные Measure Names (первые 10):', [...new Set(measureNames)]);
+        
+        // Проверяем есть ли ожидаемый measure
+        if (expectedMeasure && !measureNames.includes(expectedMeasure)) {
+            console.warn(`Внимание: Не найден ожидаемый Measure Names = "${expectedMeasure}"`);
+        }
+    }
+}
+
+function detectDelimiter(line) {
+    const delimiters = [';', ',', '\t'];
+    let bestDelimiter = ';';
+    let maxCount = 0;
+    
+    delimiters.forEach(delim => {
+        const count = (line.match(new RegExp(delim, 'g')) || []).length;
+        if (count > maxCount) {
+            maxCount = count;
+            bestDelimiter = delim;
+        }
+    });
+    
+    return bestDelimiter;
+}
