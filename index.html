@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор коэффициентов Demand/SWAT</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Калькулятор коэффициентов Demand/SWAT</h1>
+            <p class="subtitle">Автоматический расчет корректировочных коэффициентов для планирования</p>
+        </header>
+
+        <div class="rules-section">
+            <h2>📝 Правила корректировки коэффициентов</h2>
+            <div class="rules-grid">
+                <div class="rule-card">
+                    <div class="rule-number">1</div>
+                    <h3>Округление</h3>
+                    <p>Сначала округление до 2 знаков после запятой</p>
+                </div>
+                <div class="rule-card">
+                    <div class="rule-number">2</div>
+                    <h3>Диапазон 0.96-1.04</h3>
+                    <p>Значения от 0.96 до 1.04 заменяются на 1.00</p>
+                </div>
+                <div class="rule-card">
+                    <div class="rule-number">3</div>
+                    <h3>Минимум 0.8</h3>
+                    <p>Значения &lt; 0.8 заменяются на 0.80</p>
+                </div>
+                <div class="rule-card">
+                    <div class="rule-number">4</div>
+                    <h3>Максимум 1.5</h3>
+                    <p>Значения &gt; 1.5 заменяются на 1.50</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2>📁 Загрузка файлов</h2>
+            
+            <div class="file-types">
+                <div class="file-type">
+                    <h3>Файлы DEMAND</h3>
+                    <p>CSV файлы с историческими данными спроса</p>
+                    <div class="file-upload-area" id="demandUploadArea">
+                        <input type="file" id="demandFiles" accept=".csv" multiple style="display: none;">
+                        <div class="upload-placeholder">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Перетащите файлы DEMAND сюда или нажмите для выбора</p>
+                        </div>
+                        <div class="file-list" id="demandFileList"></div>
+                    </div>
+                    <button class="btn-secondary" onclick="document.getElementById('demandFiles').click()">
+                        Выбрать файлы DEMAND
+                    </button>
+                </div>
+
+                <div class="file-type">
+                    <h3>Файлы SWAT</h3>
+                    <p>CSV файлы с прогнозными данными SWAT</p>
+                    <div class="file-upload-area" id="swatUploadArea">
+                        <input type="file" id="swatFiles" accept=".csv" multiple style="display: none;">
+                        <div class="upload-placeholder">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Перетащите файлы SWAT сюда или нажмите для выбора</p>
+                        </div>
+                        <div class="file-list" id="swatFileList"></div>
+                    </div>
+                    <button class="btn-secondary" onclick="document.getElementById('swatFiles').click()">
+                        Выбрать файлы SWAT
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="options-section">
+            <h2>⚙️ Настройки расчета</h2>
+            <div class="options-grid">
+                <div class="option">
+                    <label>
+                        <input type="checkbox" id="includeExamples" checked>
+                        Включить примеры расчетов
+                    </label>
+                </div>
+                <div class="option">
+                    <label>
+                        <input type="checkbox" id="autoDownload" checked>
+                        Автоматически скачивать результат
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="calculate-section">
+            <button class="btn-primary" id="calculateBtn" onclick="calculateCoefficients()" disabled>
+                <span class="btn-text">Рассчитать коэффициенты</span>
+                <span class="spinner" style="display: none;"></span>
+            </button>
+            <p class="hint">Для начала расчета загрузите хотя бы по одному файлу каждого типа</p>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <h2>📈 Результаты расчета</h2>
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalProducts">0</div>
+                    <div class="stat-label">Всего товаров</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="coeff100">0</div>
+                    <div class="stat-label">Коэффициент = 1.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="coeff08">0</div>
+                    <div class="stat-label">Коэффициент = 0.80</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="coeff15">0</div>
+                    <div class="stat-label">Коэффициент = 1.50</div>
+                </div>
+            </div>
+
+            <div class="preview-table">
+                <h3>Предпросмотр результатов (первые 10 строк)</h3>
+                <div class="table-container">
+                    <table id="previewTable">
+                        <thead>
+                            <tr>
+                                <th>Product ID</th>
+                                <th>Название</th>
+                                <th>Коэф. raw</th>
+                                <th>Коэф. adj</th>
+                                <th>Demand</th>
+                                <th>SWAT</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Данные будут добавлены через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn-success" onclick="downloadExcel()">
+                    📥 Скачать Excel файл
+                </button>
+                <button class="btn-secondary" onclick="showDetails()">
+                    📊 Показать детальную статистику
+                </button>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h2>ℹ️ Информация</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <h3>Поддерживаемые форматы</h3>
+                    <p>CSV файлы с разделителем ";" и десятичным разделителем ","</p>
+                </div>
+                <div class="info-item">
+                    <h3>Ограничения</h3>
+                    <p>Максимальный размер файла: 10MB, максимум файлов: 10 каждого типа</p>
+                </div>
+                <div class="info-item">
+                    <h3>Примечание</h3>
+                    <p>Все расчеты выполняются локально в вашем браузере. Файлы никуда не загружаются.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно с деталями -->
+    <div class="modal" id="detailsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Детальная статистика</h2>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="detailedStats"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
