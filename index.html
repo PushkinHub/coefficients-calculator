@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
 </head>
 <body>
     <div class="container">
@@ -48,6 +49,11 @@
                 <div class="file-type">
                     <h3>Файлы DEMAND</h3>
                     <p>CSV файлы с историческими данными спроса</p>
+                    <p class="example-link">
+                        <a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=f258f86c1287" target="_blank">
+                            📋 Пример структуры файла DEMAND
+                        </a>
+                    </p>
                     <div class="file-upload-area" id="demandUploadArea">
                         <input type="file" id="demandFiles" accept=".csv" multiple style="display: none;">
                         <div class="upload-placeholder">
@@ -68,6 +74,11 @@
                 <div class="file-type">
                     <h3>Файлы SWAT</h3>
                     <p>CSV файлы с прогнозными данными SWAT</p>
+                    <p class="example-link">
+                        <a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=81d9908b1227" target="_blank">
+                            📋 Пример структуры файла SWAT
+                        </a>
+                    </p>
                     <div class="file-upload-area" id="swatUploadArea">
                         <input type="file" id="swatFiles" accept=".csv" multiple style="display: none;">
                         <div class="upload-placeholder">
@@ -197,6 +208,48 @@
         </div>
     </div>
 
+    <!-- Дебаг кнопка -->
+    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;">
+        <button onclick="debugFiles()" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 12px;">
+            Debug
+        </button>
+    </div>
+
     <script src="script.js"></script>
+    <script>
+    // Функция для дебага
+    function debugFiles() {
+        console.log('=== DEBUG INFO ===');
+        console.log('DEMAND файлы:', demandFiles);
+        console.log('SWAT файлы:', swatFiles);
+        
+        // Читаем и показываем содержимое первого файла
+        if (demandFiles.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                console.log('=== Содержимое DEMAND файла ===');
+                console.log(e.target.result.substring(0, 500));
+                const lines = e.target.result.split('\n');
+                console.log('Первые 5 строк:');
+                lines.slice(0, 5).forEach((line, i) => console.log(`${i}: ${line}`));
+                console.log('Заголовки:', lines[0]);
+            };
+            reader.readAsText(demandFiles[0]);
+        }
+        
+        if (swatFiles.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                console.log('=== Содержимое SWAT файла ===');
+                console.log(e.target.result.substring(0, 500));
+                const lines = e.target.result.split('\n');
+                console.log('Первые 5 строк:');
+                lines.slice(0, 5).forEach((line, i) => console.log(`${i}: ${line}`));
+                console.log('Заголовки:', lines[0]);
+            };
+            reader.readAsText(swatFiles[0]);
+        }
+    }
+    </script>
 </body>
 </html>
