@@ -44,10 +44,13 @@
 - Десятичный разделитель: `,` (запятая)
 
 ### Обязательные колонки
-Measure Names;level 1;level 2;level 3;level 4;date_scale;value
+Measure Names; level 1; level 2; level 3; level 4; date_scale; value
 
 ### Пример файла
 ```csv
 Measure Names;level 1;level 2;level 3;level 4;date_scale;value
 demand;Москва;Готовые блюда;Шницель из курицы;10000100;19.01.2026;3530
 prediction_swat;Москва;Готовые блюда;Шницель из курицы;10000100;02.02.2026;3030
+
+<img width="1785" height="370" alt="image" src="https://github.com/user-attachments/assets/5aeae2b9-2326-48f2-b2ee-45209fef3e13" />
+
