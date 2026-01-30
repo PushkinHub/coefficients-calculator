@@ -4,7 +4,7 @@
 ## 🚀 Быстрый старт
 
 ### Онлайн версия
-Просто откройте [https://ваш-username.github.io/coefficients-calculator/](https://ваш-username.github.io/coefficients-calculator/)
+Просто откройте https://pushkinhub.github.io/coefficients-calculator/
 
 ### Локальная версия
 1. Скачайте или клонируйте репозиторий
