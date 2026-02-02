@@ -201,6 +201,7 @@ class CoefficientCalculator {
         let allPrediction = [];
         let allOSA = [];
         let allWriteoffs = [];
+        let allSales = [];  // НОВОЕ: Добавляем коллекцию для sales
         
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
@@ -236,18 +237,21 @@ class CoefficientCalculator {
                     allOSA.push(item);
                 } else if (measure === 'writeoffs_perc') {
                     allWriteoffs.push(item);
+                } else if (measure === 'sales') {  // НОВОЕ: Добавляем обработку sales
+                    allSales.push(item);
                 }
             }
         }
         
-        console.log(`Demand записи: ${allDemand.length}, Prediction записи: ${allPrediction.length}`);
+        console.log(`Demand записи: ${allDemand.length}, Prediction записи: ${allPrediction.length}, Sales записи: ${allSales.length}`);
         
         // Агрегируем данные
         return {
             demand: this.aggregateToArray(allDemand, 'sum'),
             prediction: this.aggregateToArray(allPrediction, 'sum'),
             osa: this.aggregateToArray(allOSA, 'avg'),
-            writeoffs: this.aggregateToArray(allWriteoffs, 'avg')
+            writeoffs: this.aggregateToArray(allWriteoffs, 'avg'),
+            sales: this.aggregateToArray(allSales, 'sum')  // НОВОЕ: Добавляем агрегацию sales
         };
     }
     
@@ -336,6 +340,7 @@ class CoefficientCalculator {
         const predictionMap = new Map();
         const osaMap = new Map();
         const writeoffsMap = new Map();
+        const salesMap = new Map();  // НОВОЕ: Добавляем Map для sales
         
         // Заполняем Map'ы
         if (Array.isArray(demandData.demand)) {
@@ -370,7 +375,16 @@ class CoefficientCalculator {
             });
         }
         
-        console.log(`Уникальных товаров в demand: ${demandMap.size}`);
+        // НОВОЕ: Заполняем Map для sales
+        if (Array.isArray(demandData.sales)) {
+            demandData.sales.forEach(item => {
+                if (item && item.product_id) {
+                    salesMap.set(item.product_id, item);
+                }
+            });
+        }
+        
+        console.log(`Уникальных товаров в demand: ${demandMap.size}, в sales: ${salesMap.size}`);
         
         // Обрабатываем все demand записи
         for (const [productId, demandItem] of demandMap) {
@@ -380,14 +394,17 @@ class CoefficientCalculator {
             const prediction = predictionMap.get(productId) || { value: 0 };
             const osa = osaMap.get(productId) || { value: 0 };
             const writeoffs = writeoffsMap.get(productId) || { value: 0 };
+            const sales = salesMap.get(productId) || { value: 0 };  // НОВОЕ: Получаем sales
             
             // Значения
             const demandValue = demand.value || 0;
             const predictionValue = prediction.value || 0;
+            const salesValue = sales.value || 0;  // НОВОЕ: Получаем значение sales
             
             // Округление
             const demandRounded = Math.round(demandValue);
             const predictionRounded = Math.round(predictionValue);
+            const salesRounded = Math.round(salesValue);  // НОВОЕ: Округляем sales
             
             // Difference
             const difference = predictionRounded - demandRounded;
@@ -403,10 +420,11 @@ class CoefficientCalculator {
                 level4: demand.level4,
                 demand_sum: demandRounded,
                 prediction_final_sum: predictionRounded,
+                sales_sum: salesRounded,  // НОВОЕ: Добавляем sales
                 difference: difference,
-                bias_percent: Math.round(bias * 100) / 100,
-                osa_percent: Math.round(osa.value * 100 * 100) / 100,
-                writeoffs_percent: Math.round(writeoffs.value * 100 * 100) / 100
+                bias_percent: Math.round(bias * 1000) / 1000,  // Изменено: 3 знака после запятой
+                osa_percent: Math.round(osa.value * 100 * 1000) / 1000,  // Изменено: 3 знака после запятой
+                writeoffs_percent: Math.round(writeoffs.value * 100 * 1000) / 1000  // Изменено: 3 знака после запятой
             });
         }
         
@@ -485,7 +503,7 @@ class CoefficientCalculator {
         
         if (this.results.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="9" class="text-center">Нет данных для отображения</td>`;
+            row.innerHTML = `<td colspan="11" class="text-center">Нет данных для отображения</td>`;
             table.appendChild(row);
             return;
         }
@@ -502,11 +520,14 @@ class CoefficientCalculator {
                 <td>${item.level3 || ''}</td>
                 <td class="${coefClass}">${item.coefficient_raw.toFixed(2)}</td>
                 <td class="${coefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
+                <td>${item.sales_sum.toLocaleString()}</td>  <!-- НОВОЕ: Добавляем sales -->
+                <td>${item.prediction_final_sum.toLocaleString()}</td>
                 <td>${item.demand_sum.toLocaleString()}</td>
                 <td>${item.swat_sum.toLocaleString()}</td>
-                <td>${item.prediction_final_sum.toLocaleString()}</td>
                 <td class="${diffClass}">${item.difference.toLocaleString()}</td>
-                <td class="${diffClass}">${item.bias_percent.toFixed(2)}%</td>
+                <td>${item.bias_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
+                <td>${item.osa_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
+                <td>${item.writeoffs_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
             `;
             table.appendChild(row);
         });
@@ -514,7 +535,7 @@ class CoefficientCalculator {
         // Показываем количество неотображенных строк
         if (this.results.length > 50) {
             const infoRow = document.createElement('tr');
-            infoRow.innerHTML = `<td colspan="9" class="text-center text-muted">
+            infoRow.innerHTML = `<td colspan="12" class="text-center text-muted">
                 ... и ещё ${this.results.length - 50} строк. Скачайте Excel файл для просмотра всех данных.
             </td>`;
             table.appendChild(infoRow);
@@ -536,6 +557,7 @@ class CoefficientCalculator {
         const totalDemand = this.results.reduce((sum, r) => sum + r.demand_sum, 0);
         const totalSwat = this.results.reduce((sum, r) => sum + r.swat_sum, 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + r.prediction_final_sum, 0);
+        const totalSales = this.results.reduce((sum, r) => sum + r.sales_sum, 0);  // НОВОЕ: Сумма sales
         const totalDifference = this.results.reduce((sum, r) => sum + r.difference, 0);
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total : 0;
         
@@ -557,6 +579,10 @@ class CoefficientCalculator {
                 <div class="stat-label">Коэф = 1.50</div>
             </div>
             <div class="stat-card">
+                <div class="stat-value">${totalSales.toLocaleString()}</div>
+                <div class="stat-label">Сумма Sales</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-value">${totalDemand.toLocaleString()}</div>
                 <div class="stat-label">Сумма Demand</div>
             </div>
@@ -565,146 +591,145 @@ class CoefficientCalculator {
                 <div class="stat-label">Сумма SWAT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">${avgBias.toFixed(2)}%</div>
+                <div class="stat-value">${avgBias.toFixed(3)}%</div>
                 <div class="stat-label">Средний Bias</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalDifference > 0 ? '+' : ''}${totalDifference.toLocaleString()}</div>
-                <div class="stat-label">Общая разница</div>
             </div>
         `;
     }
     
     async downloadExcel() {
-    if (!this.results || this.results.length === 0) {
-        this.showAlert('warning', 'Нет данных для экспорта');
-        return;
-    }
-    
-    this.showLoading(true);
-    
-    try {
-        // Основной лист с коэффициентами
-        const mainData = this.results.map(item => ({
-            'Product ID': item.product_id,
-            'Level 1': item.level1,
-            'Level 2': item.level2,
-            'Level 3': item.level3,
-            'Level 4': item.level4,
-            'Коэффициент (raw)': item.coefficient_raw,
-            'Коэффициент (adjusted)': item.coefficient_adjusted,
-            'Demand': item.demand_sum,
-            'SWAT': item.swat_sum,
-            'Prediction Final': item.prediction_final_sum,
-            'Difference': item.difference,
-            // Уже в правильном формате для процентов (0.xx = xx%)
-            'Bias %': (item.bias_percent || 0) / 100,
-            'OSA %': (item.osa_percent || 0) / 100,
-            'Writeoffs %': (item.writeoffs_percent || 0) / 100
-        }));
-        
-        // Лист со статистикой
-        const total = this.results.length;
-        const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
-        const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
-        const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
-        
-        const statsData = [
-            ['Статистика коэффициентов', 'Количество', 'Процент'],
-            ['Коэффициент = 1.00', coef1, `${(coef1/total*100).toFixed(1)}%`],
-            ['Коэффициент = 0.80', coef08, `${(coef08/total*100).toFixed(1)}%`],
-            ['Коэффициент = 1.50', coef15, `${(coef15/total*100).toFixed(1)}%`],
-            ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15)/total*100).toFixed(1)}%`],
-            ['Всего товаров', total, '100%']
-        ];
-        
-        // Создаем рабочую книгу
-        const wb = XLSX.utils.book_new();
-        
-        // Основной лист
-        const ws1 = XLSX.utils.json_to_sheet(mainData);
-        
-        // Автоматически форматируем проценты
-        const range = XLSX.utils.decode_range(ws1['!ref']);
-        
-        // Находим колонки с процентами
-        const percentColumns = {};
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cellAddress = XLSX.utils.encode_cell({r: range.s.r, c: C});
-            const cell = ws1[cellAddress];
-            if (cell && (
-                cell.v === 'Bias %' || 
-                cell.v === 'OSA %' || 
-                cell.v === 'Writeoffs %'
-            )) {
-                percentColumns[C] = true;
-            }
+        if (!this.results || this.results.length === 0) {
+            this.showAlert('warning', 'Нет данных для экспорта');
+            return;
         }
         
-        // Применяем процентный формат ко всем ячейкам в найденных колонках
-        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-            Object.keys(percentColumns).forEach(col => {
-                const cellAddress = XLSX.utils.encode_cell({r: R, c: parseInt(col)});
-                if (ws1[cellAddress]) {
-                    // Форматируем как проценты с 2 знаками после запятой
-                    ws1[cellAddress].z = '0.00%';
+        this.showLoading(true);
+        
+        try {
+            // Основной лист с коэффициентами
+            const mainData = this.results.map(item => ({
+                'Product ID': item.product_id,
+                'Level 1': item.level1,
+                'Level 2': item.level2,
+                'Level 3': item.level3,
+                'Level 4': item.level4,
+                'Коэффициент (raw)': item.coefficient_raw,
+                'Коэффициент (adjusted)': item.coefficient_adjusted,
+                'Sales': item.sales_sum,  // НОВОЕ: Добавляем Sales
+                'Prediction': item.prediction_final_sum,
+                'Demand': item.demand_sum,
+                'SWAT': item.swat_sum,
+                'Difference': item.difference,
+                // Форматируем проценты с 3 знаками после запятой
+                'Bias %': (item.bias_percent || 0) / 100,
+                'OSA %': (item.osa_percent || 0) / 100,
+                'Writeoffs %': (item.writeoffs_percent || 0) / 100
+            }));
+            
+            // Лист со статистикой
+            const total = this.results.length;
+            const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
+            const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
+            const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
+            
+            const statsData = [
+                ['Статистика коэффициентов', 'Количество', 'Процент'],
+                ['Коэффициент = 1.00', coef1, `${(coef1/total*100).toFixed(1)}%`],
+                ['Коэффициент = 0.80', coef08, `${(coef08/total*100).toFixed(1)}%`],
+                ['Коэффициент = 1.50', coef15, `${(coef15/total*100).toFixed(1)}%`],
+                ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15)/total*100).toFixed(1)}%`],
+                ['Всего товаров', total, '100%']
+            ];
+            
+            // Создаем рабочую книгу
+            const wb = XLSX.utils.book_new();
+            
+            // Основной лист
+            const ws1 = XLSX.utils.json_to_sheet(mainData);
+            
+            // Автоматически форматируем проценты с 3 знаками после запятой
+            const range = XLSX.utils.decode_range(ws1['!ref']);
+            
+            // Находим колонки с процентами
+            const percentColumns = {};
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cellAddress = XLSX.utils.encode_cell({r: range.s.r, c: C});
+                const cell = ws1[cellAddress];
+                if (cell && (
+                    cell.v === 'Bias %' || 
+                    cell.v === 'OSA %' || 
+                    cell.v === 'Writeoffs %'
+                )) {
+                    percentColumns[C] = true;
                 }
-            });
+            }
+            
+            // Применяем процентный формат ко всем ячейкам в найденных колонках
+            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+                Object.keys(percentColumns).forEach(col => {
+                    const cellAddress = XLSX.utils.encode_cell({r: R, c: parseInt(col)});
+                    if (ws1[cellAddress]) {
+                        // Форматируем как проценты с 3 знаками после запятой
+                        ws1[cellAddress].z = '0.000%';
+                    }
+                });
+            }
+            
+            XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
+            
+            // Лист со статистикой
+            const ws2 = XLSX.utils.aoa_to_sheet(statsData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Статистика');
+            
+            // Лист с информацией
+            const infoData = [
+                ['Параметр', 'Значение'],
+                ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
+                ['Количество товаров', total],
+                ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
+                ['Новые метрики', 'Sales добавлен в отчет'],
+                ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
+                ['Формула Difference', 'prediction_final - demand'],
+                ['Формула коэффициента', 'demand / swat'],
+                ['Формат процентов', 'Колонки Bias %, OSA %, Writeoffs % отформатированы как проценты с 3 знаками после запятой'],
+                ['Количество файлов DEMAND', this.demandFiles.length],
+                ['Количество файлов SWAT', this.swatFiles.length]
+            ];
+            const ws3 = XLSX.utils.aoa_to_sheet(infoData);
+            XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
+            
+            // Настраиваем ширину колонок для красивого отображения
+            const colWidths = [
+                {wch: 20}, // Product ID
+                {wch: 15}, // Level 1
+                {wch: 25}, // Level 2
+                {wch: 40}, // Level 3
+                {wch: 12}, // Level 4
+                {wch: 15}, // Коэффициент (raw)
+                {wch: 15}, // Коэффициент (adjusted)
+                {wch: 10}, // Sales
+                {wch: 15}, // Prediction
+                {wch: 10}, // Demand
+                {wch: 10}, // SWAT
+                {wch: 12}, // Difference
+                {wch: 10}, // Bias %
+                {wch: 10}, // OSA %
+                {wch: 12}  // Writeoffs %
+            ];
+            ws1['!cols'] = colWidths;
+            
+            // Сохраняем файл
+            const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            
+            this.showAlert('success', `Файл "${filename}" успешно скачан!`);
+        } catch (error) {
+            console.error('Excel export error:', error);
+            this.showAlert('danger', 'Ошибка при создании Excel файла: ' + error.message);
+        } finally {
+            this.showLoading(false);
         }
-        
-        XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
-        
-        // Лист со статистикой
-        const ws2 = XLSX.utils.aoa_to_sheet(statsData);
-        XLSX.utils.book_append_sheet(wb, ws2, 'Статистика');
-        
-        // Лист с информацией
-        const infoData = [
-            ['Параметр', 'Значение'],
-            ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
-            ['Количество товаров', total],
-            ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
-            ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
-            ['Формула Difference', 'prediction_final - demand'],
-            ['Формула коэффициента', 'demand / swat'],
-            ['Формат процентов', 'Колонки Bias %, OSA %, Writeoffs % автоматически отформатированы как проценты'],
-            ['Количество файлов DEMAND', this.demandFiles.length],
-            ['Количество файлов SWAT', this.swatFiles.length]
-        ];
-        const ws3 = XLSX.utils.aoa_to_sheet(infoData);
-        XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
-        
-        // Настраиваем ширину колонок для красивого отображения
-        const colWidths = [
-            {wch: 20}, // Product ID
-            {wch: 15}, // Level 1
-            {wch: 25}, // Level 2
-            {wch: 40}, // Level 3
-            {wch: 12}, // Level 4
-            {wch: 15}, // Коэффициент (raw)
-            {wch: 15}, // Коэффициент (adjusted)
-            {wch: 10}, // Demand
-            {wch: 10}, // SWAT
-            {wch: 15}, // Prediction Final
-            {wch: 12}, // Difference
-            {wch: 10}, // Bias %
-            {wch: 10}, // OSA %
-            {wch: 12}  // Writeoffs %
-        ];
-        ws1['!cols'] = colWidths;
-        
-        // Сохраняем файл
-        const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
-        XLSX.writeFile(wb, filename);
-        
-        this.showAlert('success', `Файл "${filename}" успешно скачан! Проценты уже отформатированы.`);
-    } catch (error) {
-        console.error('Excel export error:', error);
-        this.showAlert('danger', 'Ошибка при создании Excel файла: ' + error.message);
-    } finally {
-        this.showLoading(false);
     }
-}
     
     // Вспомогательные методы
     async readFile(file) {
@@ -861,6 +886,3 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
-
-
-
