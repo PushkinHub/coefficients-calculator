@@ -201,7 +201,7 @@ class CoefficientCalculator {
         let allPrediction = [];
         let allOSA = [];
         let allWriteoffs = [];
-        let allSales = [];  // НОВОЕ: Добавляем коллекцию для sales
+        let allSales = [];  // ДОБАВЛЕНО: для sales
         
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
@@ -237,7 +237,7 @@ class CoefficientCalculator {
                     allOSA.push(item);
                 } else if (measure === 'writeoffs_perc') {
                     allWriteoffs.push(item);
-                } else if (measure === 'sales') {  // НОВОЕ: Добавляем обработку sales
+                } else if (measure === 'sales') {  // ДОБАВЛЕНО: обработка sales
                     allSales.push(item);
                 }
             }
@@ -251,7 +251,7 @@ class CoefficientCalculator {
             prediction: this.aggregateToArray(allPrediction, 'sum'),
             osa: this.aggregateToArray(allOSA, 'avg'),
             writeoffs: this.aggregateToArray(allWriteoffs, 'avg'),
-            sales: this.aggregateToArray(allSales, 'sum')  // НОВОЕ: Добавляем агрегацию sales
+            sales: this.aggregateToArray(allSales, 'sum')  // ДОБАВЛЕНО: sales
         };
     }
     
@@ -340,7 +340,7 @@ class CoefficientCalculator {
         const predictionMap = new Map();
         const osaMap = new Map();
         const writeoffsMap = new Map();
-        const salesMap = new Map();  // НОВОЕ: Добавляем Map для sales
+        const salesMap = new Map();  // ДОБАВЛЕНО: Map для sales
         
         // Заполняем Map'ы
         if (Array.isArray(demandData.demand)) {
@@ -375,7 +375,7 @@ class CoefficientCalculator {
             });
         }
         
-        // НОВОЕ: Заполняем Map для sales
+        // ДОБАВЛЕНО: Заполняем Map для sales
         if (Array.isArray(demandData.sales)) {
             demandData.sales.forEach(item => {
                 if (item && item.product_id) {
@@ -394,23 +394,24 @@ class CoefficientCalculator {
             const prediction = predictionMap.get(productId) || { value: 0 };
             const osa = osaMap.get(productId) || { value: 0 };
             const writeoffs = writeoffsMap.get(productId) || { value: 0 };
-            const sales = salesMap.get(productId) || { value: 0 };  // НОВОЕ: Получаем sales
+            const sales = salesMap.get(productId) || { value: 0 };  // ДОБАВЛЕНО: sales
             
             // Значения
             const demandValue = demand.value || 0;
             const predictionValue = prediction.value || 0;
-            const salesValue = sales.value || 0;  // НОВОЕ: Получаем значение sales
+            const salesValue = sales.value || 0;  // ДОБАВЛЕНО: sales
             
             // Округление
             const demandRounded = Math.round(demandValue);
             const predictionRounded = Math.round(predictionValue);
-            const salesRounded = Math.round(salesValue);  // НОВОЕ: Округляем sales
+            const salesRounded = Math.round(salesValue);  // ДОБАВЛЕНО: sales
             
             // Difference
             const difference = predictionRounded - demandRounded;
             
-            // Bias %
-            const bias = demandRounded !== 0 ? (difference / demandRounded * 100) : 0;
+            // Bias % - исправлено форматирование
+            const bias = demandRounded !== 0 ? (difference / demandRounded) : 0;
+            const biasPercent = Math.round(bias * 100000) / 1000;  // Округление до 3 знаков
             
             results.push({
                 product_id: productId,
@@ -420,11 +421,11 @@ class CoefficientCalculator {
                 level4: demand.level4,
                 demand_sum: demandRounded,
                 prediction_final_sum: predictionRounded,
-                sales_sum: salesRounded,  // НОВОЕ: Добавляем sales
+                sales_sum: salesRounded,  // ДОБАВЛЕНО: sales
                 difference: difference,
-                bias_percent: Math.round(bias * 1000) / 1000,  // Изменено: 3 знака после запятой
-                osa_percent: Math.round(osa.value * 100 * 1000) / 1000,  // Изменено: 3 знака после запятой
-                writeoffs_percent: Math.round(writeoffs.value * 100 * 1000) / 1000  // Изменено: 3 знака после запятой
+                bias_percent: biasPercent,
+                osa_percent: Math.round(osa.value * 100000) / 1000,  // 3 знака после запятой
+                writeoffs_percent: Math.round(writeoffs.value * 100000) / 1000  // 3 знака после запятой
             });
         }
         
@@ -503,10 +504,29 @@ class CoefficientCalculator {
         
         if (this.results.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="11" class="text-center">Нет данных для отображения</td>`;
+            row.innerHTML = `<td colspan="12" class="text-center">Нет данных для отображения</td>`;
             table.appendChild(row);
             return;
         }
+        
+        // Заголовки таблицы в нужном порядке
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = `
+            <th>Product ID</th>
+            <th>Level 3</th>
+            <th>Коэф (raw)</th>
+            <th>Коэф (adj)</th>
+            <th>Sales</th>
+            <th>Prediction</th>
+            <th>Final</th>
+            <th>Demand</th>
+            <th>SWAT</th>
+            <th>Difference</th>
+            <th>Bias %</th>
+            <th>OSA %</th>
+            <th>Writeoffs %</th>
+        `;
+        table.appendChild(headerRow);
         
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
@@ -515,19 +535,25 @@ class CoefficientCalculator {
             const coefClass = this.getCoefficientClass(item.coefficient_adjusted);
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
             
+            // Форматируем проценты с 3 знаками после запятой
+            const biasFormatted = (item.bias_percent || 0).toFixed(3);
+            const osaFormatted = (item.osa_percent || 0).toFixed(3);
+            const writeoffsFormatted = (item.writeoffs_percent || 0).toFixed(3);
+            
             row.innerHTML = `
                 <td>${item.product_id || ''}</td>
                 <td>${item.level3 || ''}</td>
                 <td class="${coefClass}">${item.coefficient_raw.toFixed(2)}</td>
                 <td class="${coefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
-                <td>${item.sales_sum.toLocaleString()}</td>  <!-- НОВОЕ: Добавляем sales -->
+                <td>${item.sales_sum.toLocaleString()}</td>
+                <td>${item.prediction_final_sum.toLocaleString()}</td>
                 <td>${item.prediction_final_sum.toLocaleString()}</td>
                 <td>${item.demand_sum.toLocaleString()}</td>
                 <td>${item.swat_sum.toLocaleString()}</td>
                 <td class="${diffClass}">${item.difference.toLocaleString()}</td>
-                <td>${item.bias_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
-                <td>${item.osa_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
-                <td>${item.writeoffs_percent.toFixed(3)}%</td>  <!-- Изменено: 3 знака после запятой -->
+                <td>${biasFormatted}%</td>
+                <td>${osaFormatted}%</td>
+                <td>${writeoffsFormatted}%</td>
             `;
             table.appendChild(row);
         });
@@ -535,7 +561,7 @@ class CoefficientCalculator {
         // Показываем количество неотображенных строк
         if (this.results.length > 50) {
             const infoRow = document.createElement('tr');
-            infoRow.innerHTML = `<td colspan="12" class="text-center text-muted">
+            infoRow.innerHTML = `<td colspan="13" class="text-center text-muted">
                 ... и ещё ${this.results.length - 50} строк. Скачайте Excel файл для просмотра всех данных.
             </td>`;
             table.appendChild(infoRow);
@@ -552,12 +578,11 @@ class CoefficientCalculator {
         const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
         const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
         const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
-        const coefOther = total - coef1 - coef08 - coef15;
         
         const totalDemand = this.results.reduce((sum, r) => sum + r.demand_sum, 0);
         const totalSwat = this.results.reduce((sum, r) => sum + r.swat_sum, 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + r.prediction_final_sum, 0);
-        const totalSales = this.results.reduce((sum, r) => sum + r.sales_sum, 0);  // НОВОЕ: Сумма sales
+        const totalSales = this.results.reduce((sum, r) => sum + r.sales_sum, 0);  // ДОБАВЛЕНО: sales
         const totalDifference = this.results.reduce((sum, r) => sum + r.difference, 0);
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total : 0;
         
@@ -606,7 +631,7 @@ class CoefficientCalculator {
         this.showLoading(true);
         
         try {
-            // Основной лист с коэффициентами
+            // Основной лист с коэффициентами - В ПРАВИЛЬНОМ ПОРЯДКЕ
             const mainData = this.results.map(item => ({
                 'Product ID': item.product_id,
                 'Level 1': item.level1,
@@ -615,13 +640,13 @@ class CoefficientCalculator {
                 'Level 4': item.level4,
                 'Коэффициент (raw)': item.coefficient_raw,
                 'Коэффициент (adjusted)': item.coefficient_adjusted,
-                'Sales': item.sales_sum,  // НОВОЕ: Добавляем Sales
-                'Prediction': item.prediction_final_sum,
-                'Demand': item.demand_sum,
-                'SWAT': item.swat_sum,
+                'Sales': item.sales_sum,  // В НУЖНОМ ПОРЯДКЕ: Sales
+                'Prediction': item.prediction_final_sum,  // Prediction
+                'Final': item.prediction_final_sum,  // Final (дубликат Prediction)
+                'Demand': item.demand_sum,  // Demand
+                'SWAT': item.swat_sum,  // SWAT
                 'Difference': item.difference,
-                // Форматируем проценты с 3 знаками после запятой
-                'Bias %': (item.bias_percent || 0) / 100,
+                'Bias %': (item.bias_percent || 0) / 100,  // Уже в формате процентов (0.xxx = xx.x%)
                 'OSA %': (item.osa_percent || 0) / 100,
                 'Writeoffs %': (item.writeoffs_percent || 0) / 100
             }));
@@ -688,10 +713,11 @@ class CoefficientCalculator {
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
                 ['Новые метрики', 'Sales добавлен в отчет'],
+                ['Порядок колонок', 'Sales, Prediction, Final, Demand, SWAT'],
+                ['Формат процентов', 'Bias %, OSA %, Writeoffs % отформатированы как проценты с 3 знаками после запятой'],
                 ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
                 ['Формула Difference', 'prediction_final - demand'],
                 ['Формула коэффициента', 'demand / swat'],
-                ['Формат процентов', 'Колонки Bias %, OSA %, Writeoffs % отформатированы как проценты с 3 знаками после запятой'],
                 ['Количество файлов DEMAND', this.demandFiles.length],
                 ['Количество файлов SWAT', this.swatFiles.length]
             ];
@@ -709,6 +735,7 @@ class CoefficientCalculator {
                 {wch: 15}, // Коэффициент (adjusted)
                 {wch: 10}, // Sales
                 {wch: 15}, // Prediction
+                {wch: 10}, // Final
                 {wch: 10}, // Demand
                 {wch: 10}, // SWAT
                 {wch: 12}, // Difference
@@ -722,7 +749,7 @@ class CoefficientCalculator {
             const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
             XLSX.writeFile(wb, filename);
             
-            this.showAlert('success', `Файл "${filename}" успешно скачан!`);
+            this.showAlert('success', `Файл "${filename}" успешно скачан! Sales добавлен, проценты отформатированы.`);
         } catch (error) {
             console.error('Excel export error:', error);
             this.showAlert('danger', 'Ошибка при создании Excel файла: ' + error.message);
