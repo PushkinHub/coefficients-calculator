@@ -603,22 +603,53 @@ class CoefficientCalculator {
             'Writeoffs %': (item.writeoffs_percent || 0) / 100
         }));
         
+        // Лист со статистикой
+        const total = this.results.length;
+        const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
+        const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
+        const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
+        
+        const statsData = [
+            ['Статистика коэффициентов', 'Количество', 'Процент'],
+            ['Коэффициент = 1.00', coef1, `${(coef1/total*100).toFixed(1)}%`],
+            ['Коэффициент = 0.80', coef08, `${(coef08/total*100).toFixed(1)}%`],
+            ['Коэффициент = 1.50', coef15, `${(coef15/total*100).toFixed(1)}%`],
+            ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15)/total*100).toFixed(1)}%`],
+            ['Всего товаров', total, '100%']
+        ];
+        
         // Создаем рабочую книгу
         const wb = XLSX.utils.book_new();
+        
+        // Основной лист
         const ws1 = XLSX.utils.json_to_sheet(mainData);
         XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
         
-        // Форматируем проценты ПОСЛЕ создания листа
-        setTimeout(() => {
-            // Это сработает после открытия файла в Excel
-            // Excel сам распознает числа как проценты
-        }, 100);
+        // Лист со статистикой
+        const ws2 = XLSX.utils.aoa_to_sheet(statsData);
+        XLSX.utils.book_append_sheet(wb, ws2, 'Статистика');
+        
+        // Лист с информацией
+        const infoData = [
+            ['Параметр', 'Значение'],
+            ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
+            ['Количество товаров', total],
+            ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
+            ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
+            ['Формула Difference', 'prediction_final - demand'],
+            ['Формула коэффициента', 'demand / swat'],
+            ['Примечание', 'Колонки Bias %, OSA %, Writeoffs % в процентах (например, 0.1786 = 17.86%)'],
+            ['Количество файлов DEMAND', this.demandFiles.length],
+            ['Количество файлов SWAT', this.swatFiles.length]
+        ];
+        const ws3 = XLSX.utils.aoa_to_sheet(infoData);
+        XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
         
         // Сохраняем файл
         const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
         XLSX.writeFile(wb, filename);
         
-        this.showAlert('success', `Файл "${filename}" успешно скачан! Откройте его и отформатируйте колонки с процентами как "Процентный формат".`);
+        this.showAlert('success', `Файл "${filename}" успешно скачан! Откройте его и отформатируйте колонки Bias %, OSA %, Writeoffs % как "Процентный формат".`);
     } catch (error) {
         console.error('Excel export error:', error);
         this.showAlert('danger', 'Ошибка при создании Excel файла: ' + error.message);
@@ -782,4 +813,5 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
 
