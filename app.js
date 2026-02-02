@@ -198,9 +198,6 @@ class CoefficientCalculator {
 
     async processDemandFiles() {
         let allData = [];
-        let salesCount = 0;
-        let demandCount = 0;
-        let predictionCount = 0;
 
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
@@ -208,63 +205,39 @@ class CoefficientCalculator {
 
             console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
 
+            // Колонка с числовым значением: последняя или не из списка размерностей (как в ноутбуке)
+            const knownDim = ['level 1', 'level 2', 'level 3', 'level 4', 'level  5', 'level  6', 'date_scale', 'Measure Names'];
+            const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+            const valueCol = headers.find(h => !knownDim.includes(h)) || headers[headers.length - 1] || '';
+
             for (const row of rows) {
-                const measure = row['Measure Names'] || row['MeasureNames'] || row['Measure names'];
-                if (!measure) continue;
+                const measureRaw = row['Measure Names'];
+                if (!measureRaw) continue;
 
-                // Исправляем кодировку русских букв
-                const decodeCyrillic = (str) => {
-                    if (!str) return '';
-                    try {
-                        // Если строка уже в нормальной кодировке
-                        if (/[а-яА-Я]/.test(str)) return str;
-                        
-                        // Пробуем декодировать из CP1251/Windows-1251
-                        const decoder = new TextDecoder('windows-1251');
-                        const encoder = new TextEncoder();
-                        const bytes = encoder.encode(str);
-                        return decoder.decode(bytes);
-                    } catch (e) {
-                        return str; // Если не получается, оставляем как есть
-                    }
-                };
+                const measure = String(measureRaw).trim().toLowerCase();
+                const value = this.parseNumber(row[valueCol] ?? row[''] ?? row['Unnamed: 8'] ?? row.value ?? row.Value ?? 0);
+                const date = row['date_scale'];
 
-                const value = this.parseNumber(row[''] || row['Value'] || row['value'] || 0);
-                const date = row['date_scale'] || row['date scale'];
-
-                const level1 = decodeCyrillic(row['level 1'] || row['level1'] || '');
-                const level4 = decodeCyrillic(row['level 4'] || row['level4'] || '');
-
-                const productId = this.createProductId(level1, level4, date);
+                const productId = this.createProductId(
+                    row['level 1'] || row['level1'],
+                    row['level 4'] || row['level4'],
+                    date
+                );
 
                 allData.push({
                     product_id: productId,
-                    level1: level1,
-                    level2: decodeCyrillic(row['level 2'] || row['level2'] || ''),
-                    level3: decodeCyrillic(row['level 3'] || row['level3'] || ''),
-                    level4: level4,
+                    level1: row['level 1'] || row['level1'] || '',
+                    level2: row['level 2'] || row['level2'] || '',
+                    level3: row['level 3'] || row['level3'] || '',
+                    level4: row['level 4'] || row['level4'] || '',
                     date: date,
-                    measure: measure.trim().toLowerCase(),
+                    measure: measure,
                     value: value
                 });
-
-                // Считаем типы мер
-                const measureLower = measure.trim().toLowerCase();
-                if (measureLower === 'sales') salesCount++;
-                if (measureLower === 'demand') demandCount++;
-                if (measureLower === 'prediction_final') predictionCount++;
             }
         }
 
         console.log(`Всего записей в DEMAND: ${allData.length}`);
-        console.log(`Sales записей: ${salesCount}`);
-        console.log(`Demand записей: ${demandCount}`);
-        console.log(`Prediction записей: ${predictionCount}`);
-        
-        if (allData.length > 0) {
-            console.log('Пример первой записи:', allData[0]);
-            console.log('Measure в первой записи:', allData[0].measure);
-        }
 
         // Группируем по product_id и measure
         const grouped = {};
@@ -284,8 +257,6 @@ class CoefficientCalculator {
             }
             grouped[key].values.push(item.value);
         });
-
-        console.log(`Сгруппировано записей: ${Object.keys(grouped).length}`);
 
         // Суммируем значения для каждой группы
         const aggregated = {};
@@ -308,8 +279,9 @@ class CoefficientCalculator {
             }
 
             const sum = group.values.reduce((a, b) => a + b, 0);
+            const measureNorm = (group.measure || '').toString().trim().toLowerCase();
 
-            switch (group.measure) {
+            switch (measureNorm) {
                 case 'demand':
                     aggregated[group.product_id].demand = sum;
                     break;
@@ -334,17 +306,6 @@ class CoefficientCalculator {
             }
         });
 
-        const aggregatedValues = Object.values(aggregated);
-        console.log(`Агрегированных товаров: ${aggregatedValues.length}`);
-        
-        if (aggregatedValues.length > 0) {
-            const sampleItem = aggregatedValues[0];
-            console.log('Пример агрегированного товара:', sampleItem);
-            console.log(`Sales в примере: ${sampleItem.sales}`);
-            console.log(`Demand в примере: ${sampleItem.demand}`);
-            console.log(`Prediction в примере: ${sampleItem.prediction_final}`);
-        }
-
         return Object.values(aggregated);
     }
 
@@ -358,37 +319,24 @@ class CoefficientCalculator {
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
 
             for (const row of rows) {
-                const measure = row['Measure Names'] || row['MeasureNames'] || row['Measure names'];
-                if (!measure || measure.trim().toLowerCase() !== 'prediction_swat') continue;
+                const measure = row['Measure Names'];
+                if (measure !== 'prediction_swat') continue;
 
-                const value = this.parseNumber(row[''] || row['Value'] || row['value'] || 0);
-                const date = row['date_scale'] || row['date scale'];
+                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
+                const date = row['date_scale'];
 
-                // Исправляем кодировку русских букв
-                const decodeCyrillic = (str) => {
-                    if (!str) return '';
-                    try {
-                        if (/[а-яА-Я]/.test(str)) return str;
-                        const decoder = new TextDecoder('windows-1251');
-                        const encoder = new TextEncoder();
-                        const bytes = encoder.encode(str);
-                        return decoder.decode(bytes);
-                    } catch (e) {
-                        return str;
-                    }
-                };
-
-                const level1 = decodeCyrillic(row['level 1'] || row['level1'] || '');
-                const level4 = decodeCyrillic(row['level 4'] || row['level4'] || '');
-
-                const productId = this.createProductId(level1, level4, date);
+                const productId = this.createProductId(
+                    row['level 1'] || row['level1'],
+                    row['level 4'] || row['level4'],
+                    date
+                );
 
                 allSwat.push({
                     product_id: productId,
-                    level1: level1,
-                    level2: decodeCyrillic(row['level 2'] || row['level2'] || ''),
-                    level3: decodeCyrillic(row['level 3'] || row['level3'] || ''),
-                    level4: level4,
+                    level1: row['level 1'] || row['level1'] || '',
+                    level2: row['level 2'] || row['level2'] || '',
+                    level3: row['level 3'] || row['level3'] || '',
+                    level4: row['level 4'] || row['level4'] || '',
                     date: date,
                     value: value
                 });
@@ -439,8 +387,6 @@ class CoefficientCalculator {
             const salesRounded = Math.round(item.sales);
             const predictionRounded = Math.round(item.prediction_final);
 
-            console.log(`Товар ${item.product_id}: sales=${item.sales}, demand=${item.demand}, prediction=${item.prediction_final}`);
-
             // Difference
             const difference = predictionRounded - demandRounded;
 
@@ -466,9 +412,6 @@ class CoefficientCalculator {
         });
 
         console.log(`Рассчитано метрик: ${results.length}`);
-        if (results.length > 0) {
-            console.log('Первая метрика:', results[0]);
-        }
 
         return results;
     }
@@ -512,7 +455,6 @@ class CoefficientCalculator {
         }
 
         console.log(`Рассчитано коэффициентов: ${results.length}`);
-        console.log('Пример результата с sales:', results[0]);
 
         return results;
     }
@@ -522,17 +464,10 @@ class CoefficientCalculator {
         const table = document.getElementById('resultTable');
         const statsGrid = document.getElementById('statsGrid');
 
-        console.log('Отображаем результаты:', this.results);
-        
-        if (this.results && this.results.length > 0) {
-            console.log('Первый результат:', this.results[0]);
-            console.log('Sales в первом результате:', this.results[0].sales_sum);
-        }
-
         // Обновляем статистику
         this.updateStats(statsGrid);
 
-        // Заполняем таблицу
+        // Заполняем таблицу (заголовки уже в <thead> в index.html)
         table.innerHTML = '';
         const displayCount = Math.min(this.results.length, 50);
 
@@ -542,25 +477,6 @@ class CoefficientCalculator {
             table.appendChild(row);
             return;
         }
-
-        // Порядок колонок как в Python
-        const headerRow = document.createElement('tr');
-        headerRow.innerHTML = `
-        <th>Product ID</th>
-        <th>Level 1</th>
-        <th>Level 2</th>
-        <th>Level 3</th>
-        <th>Level 4</th>
-        <th>Sales</th>
-        <th>Demand</th>
-        <th>Prediction Final</th>
-        <th>SWAT</th>
-        <th>Difference</th>
-        <th>Bias %</th>
-        <th>Коэф. Raw</th>
-        <th>Коэф. Adj</th>
-    `;
-        table.appendChild(headerRow);
 
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
@@ -572,7 +488,7 @@ class CoefficientCalculator {
             // Для Difference
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
 
-            const biasFormatted = (item.bias_percent || 0).toFixed(3);
+            const biasFormatted = (item.bias_percent ?? 0).toFixed(3);
 
             row.innerHTML = `
             <td>${item.product_id || ''}</td>
@@ -580,14 +496,14 @@ class CoefficientCalculator {
             <td>${item.level2 || ''}</td>
             <td>${item.level3 || ''}</td>
             <td>${item.level4 || ''}</td>
-            <td>${item.sales_sum.toLocaleString()}</td>
-            <td>${item.demand_sum.toLocaleString()}</td>
-            <td>${item.prediction_final_sum.toLocaleString()}</td>
-            <td>${item.swat_sum.toLocaleString()}</td>
-            <td class="${diffClass}">${item.difference.toLocaleString()}</td>
+            <td>${(item.sales_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.demand_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.prediction_final_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.swat_sum ?? 0).toLocaleString()}</td>
+            <td class="${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
             <td>${biasFormatted}%</td>
-            <td class="${rawCoefClass}">${item.coefficient_raw.toFixed(2)}</td>
-            <td class="${adjCoefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
+            <td class="${rawCoefClass}">${(item.coefficient_raw ?? 0).toFixed(2)}</td>
+            <td class="${adjCoefClass}">${(item.coefficient_adjusted ?? 0).toFixed(2)}</td>
         `;
             table.appendChild(row);
         });
@@ -612,12 +528,12 @@ class CoefficientCalculator {
         const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
         const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
 
-        const totalSales = this.results.reduce((sum, r) => sum + r.sales_sum, 0);
-        const totalDemand = this.results.reduce((sum, r) => sum + r.demand_sum, 0);
-        const totalSwat = this.results.reduce((sum, r) => sum + r.swat_sum, 0);
-        const totalPrediction = this.results.reduce((sum, r) => sum + r.prediction_final_sum, 0);
-        const totalDifference = this.results.reduce((sum, r) => sum + r.difference, 0);
-        const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total : 0;
+        const totalSales = this.results.reduce((sum, r) => sum + (r.sales_sum ?? 0), 0);
+        const totalDemand = this.results.reduce((sum, r) => sum + (r.demand_sum ?? 0), 0);
+        const totalSwat = this.results.reduce((sum, r) => sum + (r.swat_sum ?? 0), 0);
+        const totalPrediction = this.results.reduce((sum, r) => sum + (r.prediction_final_sum ?? 0), 0);
+        const totalDifference = this.results.reduce((sum, r) => sum + (r.difference ?? 0), 0);
+        const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + (r.bias_percent ?? 0), 0) / total : 0;
 
         container.innerHTML = `
             <div class="stat-card">
@@ -671,7 +587,7 @@ class CoefficientCalculator {
                 'Level 2': item.level2,
                 'Level 3': item.level3,
                 'Level 4': item.level4,
-                'Sales': item.sales_sum,
+                'Sales': item.sales_sum ?? 0,
                 'Demand': item.demand_sum,
                 'Prediction Final': item.prediction_final_sum,
                 'SWAT': item.swat_sum,
@@ -796,7 +712,6 @@ class CoefficientCalculator {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
             reader.onerror = (e) => reject(new Error('Ошибка чтения файла'));
-            // Пробуем разные кодировки
             reader.readAsText(file, 'UTF-8');
         });
     }
@@ -806,34 +721,16 @@ class CoefficientCalculator {
             const lines = content.split('\n').filter(line => line.trim() !== '');
             if (lines.length < 2) return [];
 
-            // Автоматическое определение разделителя
-            let delimiter = ';';
-            const firstLine = lines[0];
-            
-            // Если есть табуляции, используем табуляцию как разделитель
-            if (firstLine.includes('\t')) {
-                delimiter = '\t';
-                console.log('Определен разделитель: табуляция (\\t)');
-            } else if (firstLine.includes(';')) {
-                delimiter = ';';
-                console.log('Определен разделитель: точка с запятой (;)');
-            } else if (firstLine.includes(',')) {
-                delimiter = ',';
-                console.log('Определен разделитель: запятая (,)');
-            }
+            const delimiter = ';';
 
-            const headers = firstLine.split(delimiter).map(h =>
+            const headers = lines[0].split(delimiter).map(h =>
                 h.trim().replace(/"/g, '').replace(/\s+/g, ' ')
             );
-
-            console.log('Заголовки CSV:', headers);
 
             const result = [];
 
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i];
-                if (line.trim() === '') continue;
-
                 const values = [];
                 let currentValue = '';
                 let inQuotes = false;
@@ -861,16 +758,11 @@ class CoefficientCalculator {
                 result.push(obj);
             }
 
-            console.log(`Парсинг CSV: заголовки: ${headers.length}, строк: ${result.length}`);
-            if (result.length > 0) {
-                console.log('Первая строка данных:', result[0]);
-                console.log('Measure Names в первой строке:', result[0]['Measure Names']);
-            }
+            console.log(`Парсинг CSV: заголовки: ${headers}, строк: ${result.length}`);
 
             return result;
         } catch (error) {
             console.error('CSV parsing error:', error);
-            console.error('Content sample:', content.substring(0, 500));
             return [];
         }
     }
@@ -976,3 +868,4 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
