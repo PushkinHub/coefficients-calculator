@@ -434,7 +434,9 @@ class CoefficientCalculator {
             // Применение правил корректировки
             let adjustedCoefficient = rawCoefficient;
 
-            if (isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
+            if (rawCoefficient === 0) {
+                adjustedCoefficient = 1;
+            } else if (isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
                 adjustedCoefficient = 0.8;
             } else if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
                 adjustedCoefficient = 1.00;
@@ -534,7 +536,7 @@ class CoefficientCalculator {
         const totalDemand = this.results.reduce((sum, r) => sum + (r.demand_sum ?? 0), 0);
         const totalSwat = this.results.reduce((sum, r) => sum + (r.swat_sum ?? 0), 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + (r.prediction_final_sum ?? 0), 0);
-        const totalDifference = this.results.reduce((sum, r) => sum + (r.difference ?? 0), 0);
+        const totalDifference = totalPrediction - totalDemand;
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + (r.bias_percent ?? 0), 0) / total : 0;
 
         container.innerHTML = `
@@ -561,6 +563,10 @@ class CoefficientCalculator {
             <div class="stat-card">
                 <div class="stat-value">${totalDemand.toLocaleString()}</div>
                 <div class="stat-label">Сумма Demand</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${totalPrediction.toLocaleString()}</div>
+                <div class="stat-label">Сумма Prediction final</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">${totalSwat.toLocaleString()}</div>
