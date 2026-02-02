@@ -467,7 +467,11 @@ class CoefficientCalculator {
 
         // Заполняем таблицу (заголовки уже в <thead> в index.html)
         table.innerHTML = '';
-        const displayCount = Math.min(this.results.length, 50);
+        const displayCount = Math.min(this.results.length, 10);
+        const rowCountEl = document.getElementById('resultRowCount');
+        if (rowCountEl) {
+            rowCountEl.textContent = this.results.length === 0 ? '' : `Всего строк: ${this.results.length}. Показаны первые ${displayCount}.`;
+        }
 
         if (this.results.length === 0) {
             const row = document.createElement('tr');
@@ -498,7 +502,7 @@ class CoefficientCalculator {
             <td>${(item.demand_sum ?? 0).toLocaleString()}</td>
             <td>${(item.prediction_final_sum ?? 0).toLocaleString()}</td>
             <td>${(item.swat_sum ?? 0).toLocaleString()}</td>
-            <td class="${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
+            <td class="col-diff ${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
             <td>${biasFormatted}%</td>
             <td class="${rawCoefClass}">${(item.coefficient_raw ?? 0).toFixed(2)}</td>
             <td class="${adjCoefClass}">${(item.coefficient_adjusted ?? 0).toFixed(2)}</td>
@@ -506,10 +510,10 @@ class CoefficientCalculator {
             table.appendChild(row);
         });
 
-        if (this.results.length > 50) {
+        if (this.results.length > 10) {
             const infoRow = document.createElement('tr');
             infoRow.innerHTML = `<td colspan="13" class="text-center text-muted">
-            ... и ещё ${this.results.length - 50} строк. Скачайте Excel файл для просмотра всех данных.
+            ... и ещё ${this.results.length - 10} строк. Скачайте Excel файл для просмотра всех данных.
         </td>`;
             table.appendChild(infoRow);
         }
@@ -563,7 +567,11 @@ class CoefficientCalculator {
                 <div class="stat-label">Сумма SWAT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">${avgBias.toFixed(3)}%</div>
+                <div class="stat-value">${totalDifference.toLocaleString()}</div>
+                <div class="stat-label">Общая разница (Pred − Demand)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${avgBias.toFixed(2)}%</div>
                 <div class="stat-label">Средний Bias</div>
             </div>
         `;
@@ -594,8 +602,7 @@ class CoefficientCalculator {
                 'Коэффициент (raw)': item.coefficient_raw,
                 'Коэффициент (adjusted)': item.coefficient_adjusted,
                 'OSA %': (item.osa_percent || 0) / 100,
-                'Writeoffs %': (item.writeoffs_percent || 0) / 100,
-                'Accuracy (final) %': (item.accuracy_final || 0) / 100
+                'Writeoffs %': (item.writeoffs_percent || 0) / 100
             }));
 
             // Лист со статистикой
@@ -630,8 +637,7 @@ class CoefficientCalculator {
                 if (cell && (
                     cell.v === 'Bias %' ||
                     cell.v === 'OSA %' ||
-                    cell.v === 'Writeoffs %' ||
-                    cell.v === 'Accuracy (final) %'
+                    cell.v === 'Writeoffs %'
                 )) {
                     percentColumns[C] = true;
                 }
@@ -658,9 +664,9 @@ class CoefficientCalculator {
                 ['Параметр', 'Значение'],
                 ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
                 ['Количество товаров', total],
-                ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %, Accuracy (final) %'],
+                ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
                 ['Порядок колонок', 'Sales, Demand, Prediction Final, SWAT, Difference, Bias %, Коэффициенты'],
-                ['Формат процентов', 'Bias %, OSA %, Writeoffs %, Accuracy (final) % отформатированы как проценты с 3 знаками после запятой'],
+                ['Формат процентов', 'Bias %, OSA %, Writeoffs % отформатированы как проценты с 3 знаками после запятой'],
                 ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
                 ['Формула Difference', 'prediction_final - demand'],
                 ['Формула коэффициента', 'demand / swat'],
@@ -686,8 +692,7 @@ class CoefficientCalculator {
                 { wch: 15 }, // Коэффициент (raw)
                 { wch: 15 }, // Коэффициент (adjusted)
                 { wch: 10 }, // OSA %
-                { wch: 12 }, // Writeoffs %
-                { wch: 15 }  // Accuracy (final) %
+                { wch: 12 }  // Writeoffs %
             ];
             ws1['!cols'] = colWidths;
 
