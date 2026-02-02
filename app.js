@@ -3,76 +3,76 @@ class CoefficientCalculator {
         this.demandFiles = [];
         this.swatFiles = [];
         this.results = null;
-        
+
         this.init();
     }
-    
+
     init() {
         this.bindEvents();
         this.updateCalculateButton();
     }
-    
+
     bindEvents() {
         // Demand файлы
         const demandUpload = document.getElementById('demandUpload');
         const demandInput = document.getElementById('demandFiles');
-        
+
         demandUpload.addEventListener('click', () => demandInput.click());
         demandUpload.addEventListener('dragover', (e) => {
             e.preventDefault();
             demandUpload.classList.add('drag-over');
         });
-        
+
         demandUpload.addEventListener('dragleave', () => {
             demandUpload.classList.remove('drag-over');
         });
-        
+
         demandUpload.addEventListener('drop', (e) => {
             e.preventDefault();
             demandUpload.classList.remove('drag-over');
             this.handleFiles(e.dataTransfer.files, 'demand');
         });
-        
+
         demandInput.addEventListener('change', (e) => {
             this.handleFiles(e.target.files, 'demand');
             e.target.value = '';
         });
-        
+
         // SWAT файлы
         const swatUpload = document.getElementById('swatUpload');
         const swatInput = document.getElementById('swatFiles');
-        
+
         swatUpload.addEventListener('click', () => swatInput.click());
         swatUpload.addEventListener('dragover', (e) => {
             e.preventDefault();
             swatUpload.classList.add('drag-over');
         });
-        
+
         swatUpload.addEventListener('dragleave', () => {
             swatUpload.classList.remove('drag-over');
         });
-        
+
         swatUpload.addEventListener('drop', (e) => {
             e.preventDefault();
             swatUpload.classList.remove('drag-over');
             this.handleFiles(e.dataTransfer.files, 'swat');
         });
-        
+
         swatInput.addEventListener('change', (e) => {
             this.handleFiles(e.target.files, 'swat');
             e.target.value = '';
         });
-        
+
         // Кнопка расчета
         document.getElementById('calculateBtn').addEventListener('click', () => this.calculate());
-        
+
         // Кнопка скачивания
         document.getElementById('downloadBtn').addEventListener('click', () => this.downloadExcel());
     }
-    
+
     handleFiles(files, type) {
         const validFiles = [];
-        
+
         for (let file of files) {
             if (file.name.toLowerCase().endsWith('.csv')) {
                 validFiles.push(file);
@@ -80,7 +80,7 @@ class CoefficientCalculator {
                 this.showAlert('warning', `Файл ${file.name} не является CSV файлом и будет пропущен`);
             }
         }
-        
+
         if (type === 'demand') {
             this.demandFiles.push(...validFiles);
             this.renderFileList('demandFileList', this.demandFiles, 'demand');
@@ -88,20 +88,20 @@ class CoefficientCalculator {
             this.swatFiles.push(...validFiles);
             this.renderFileList('swatFileList', this.swatFiles, 'swat');
         }
-        
+
         this.updateCalculateButton();
         this.showAlert('success', `Добавлено ${validFiles.length} файлов ${type}`);
     }
-    
+
     renderFileList(containerId, files, type) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
-        
+
         if (files.length === 0) {
             container.innerHTML = '<div class="text-muted text-center">Нет загруженных файлов</div>';
             return;
         }
-        
+
         files.forEach((file, index) => {
             const div = document.createElement('div');
             div.className = 'file-item';
@@ -116,7 +116,7 @@ class CoefficientCalculator {
             `;
             container.appendChild(div);
         });
-        
+
         // Добавляем обработчики удаления
         container.querySelectorAll('.file-remove').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -126,7 +126,7 @@ class CoefficientCalculator {
             });
         });
     }
-    
+
     removeFile(index, type) {
         if (type === 'demand') {
             this.demandFiles.splice(index, 1);
@@ -135,23 +135,23 @@ class CoefficientCalculator {
             this.swatFiles.splice(index, 1);
             this.renderFileList('swatFileList', this.swatFiles, 'swat');
         }
-        
+
         this.updateCalculateButton();
     }
-    
+
     updateCalculateButton() {
         const btn = document.getElementById('calculateBtn');
         btn.disabled = this.demandFiles.length === 0 || this.swatFiles.length === 0;
     }
-    
+
     async calculate() {
         if (this.demandFiles.length === 0 || this.swatFiles.length === 0) {
             this.showAlert('danger', 'Загрузите файлы DEMAND и SWAT');
             return;
         }
-        
+
         this.showLoading(true);
-        
+
         try {
             this.results = await this.processFiles();
             this.displayResults();
@@ -163,61 +163,61 @@ class CoefficientCalculator {
             this.showLoading(false);
         }
     }
-    
+
     async processFiles() {
         const progressContainer = document.getElementById('progressContainer');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
-        
+
         progressContainer.style.display = 'block';
-        
+
         // Шаг 1: Загрузка и обработка DEMAND файлов
         progressFill.style.width = '25%';
         progressText.textContent = '25%';
         const demandData = await this.processDemandFiles();
-        
+
         // Шаг 2: Загрузка и обработка SWAT файлов
         progressFill.style.width = '50%';
         progressText.textContent = '50%';
         const swatData = await this.processSwatFiles();
-        
+
         // Шаг 3: Расчет метрик
         progressFill.style.width = '75%';
         progressText.textContent = '75%';
         const demandMetrics = this.calculateMetrics(demandData);
-        
+
         // Шаг 4: Расчет коэффициентов
         progressFill.style.width = '100%';
         progressText.textContent = '100%';
         const results = this.calculateCoefficients(swatData, demandMetrics);
-        
+
         progressContainer.style.display = 'none';
-        
+
         return results;
     }
-    
+
     async processDemandFiles() {
         let allData = [];
-        
+
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
             const rows = this.parseCSV(content);
-            
+
             console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
-            
+
             for (const row of rows) {
                 const measure = row['Measure Names'];
                 if (!measure) continue;
-                
+
                 const value = this.parseNumber(row[''] || row.value || row.Value || 0);
                 const date = row['date_scale'];
-                
+
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
                     row['level 4'] || row['level4'],
                     date
                 );
-                
+
                 allData.push({
                     product_id: productId,
                     level1: row['level 1'] || row['level1'] || '',
@@ -230,12 +230,12 @@ class CoefficientCalculator {
                 });
             }
         }
-        
+
         console.log(`Всего записей в DEMAND: ${allData.length}`);
-        
+
         // Группируем по product_id и measure
         const grouped = {};
-        
+
         allData.forEach(item => {
             const key = `${item.product_id}_${item.measure}`;
             if (!grouped[key]) {
@@ -251,7 +251,7 @@ class CoefficientCalculator {
             }
             grouped[key].values.push(item.value);
         });
-        
+
         // Суммируем значения для каждой группы
         const aggregated = {};
         Object.values(grouped).forEach(group => {
@@ -271,9 +271,9 @@ class CoefficientCalculator {
                     accuracy: 0
                 };
             }
-            
+
             const sum = group.values.reduce((a, b) => a + b, 0);
-            
+
             switch (group.measure) {
                 case 'demand':
                     aggregated[group.product_id].demand = sum;
@@ -298,32 +298,32 @@ class CoefficientCalculator {
                     break;
             }
         });
-        
+
         return Object.values(aggregated);
     }
-    
+
     async processSwatFiles() {
         let allSwat = [];
-        
+
         for (const file of this.swatFiles) {
             const content = await this.readFile(file);
             const rows = this.parseCSV(content);
-            
+
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
-            
+
             for (const row of rows) {
                 const measure = row['Measure Names'];
                 if (measure !== 'prediction_swat') continue;
-                
+
                 const value = this.parseNumber(row[''] || row.value || row.Value || 0);
                 const date = row['date_scale'];
-                
+
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
                     row['level 4'] || row['level4'],
                     date
                 );
-                
+
                 allSwat.push({
                     product_id: productId,
                     level1: row['level 1'] || row['level1'] || '',
@@ -335,12 +335,12 @@ class CoefficientCalculator {
                 });
             }
         }
-        
+
         console.log(`SWAT записи: ${allSwat.length}`);
-        
+
         // Группируем и суммируем SWAT
         const swatGrouped = {};
-        
+
         allSwat.forEach(item => {
             const key = item.product_id;
             if (!swatGrouped[key]) {
@@ -355,7 +355,7 @@ class CoefficientCalculator {
             }
             swatGrouped[key].values.push(item.value);
         });
-        
+
         // Суммируем значения SWAT
         const swatAggregated = {};
         Object.values(swatGrouped).forEach(group => {
@@ -368,25 +368,25 @@ class CoefficientCalculator {
                 swat_sum: group.values.reduce((a, b) => a + b, 0)
             };
         });
-        
+
         return swatAggregated;
     }
-    
+
     calculateMetrics(demandData) {
         const results = [];
-        
+
         demandData.forEach(item => {
             const demandRounded = Math.round(item.demand);
             const salesRounded = Math.round(item.sales);
             const predictionRounded = Math.round(item.prediction_final);
-            
+
             // Difference
             const difference = predictionRounded - demandRounded;
-            
+
             // Bias %
             const bias = demandRounded !== 0 ? (difference / demandRounded) : 0;
             const biasPercent = Math.round(bias * 100000) / 1000;
-            
+
             results.push({
                 product_id: item.product_id,
                 level1: item.level1,
@@ -403,32 +403,32 @@ class CoefficientCalculator {
                 accuracy_final: Math.round(item.accuracy * 100000) / 1000
             });
         });
-        
+
         console.log(`Рассчитано метрик: ${results.length}`);
-        
+
         return results;
     }
-    
+
     calculateCoefficients(swatData, demandMetrics) {
         const results = [];
-        
+
         for (const metric of demandMetrics) {
             const swatItem = swatData[metric.product_id];
             const swatValue = swatItem ? swatItem.swat_sum : 0;
             const demandValue = metric.demand_sum || 0;
-            
+
             // Исходный коэффициент
             let exactCoefficient = 0;
             if (swatValue !== 0 && demandValue !== 0) {
                 exactCoefficient = demandValue / swatValue;
             }
-            
+
             // Округление до 2 знаков
             const rawCoefficient = Math.round(exactCoefficient * 100) / 100;
-            
+
             // Применение правил корректировки
             let adjustedCoefficient = rawCoefficient;
-            
+
             if (isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
                 adjustedCoefficient = 0.8;
             } else if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
@@ -438,7 +438,7 @@ class CoefficientCalculator {
             } else if (rawCoefficient > 1.5) {
                 adjustedCoefficient = 1.50;
             }
-            
+
             results.push({
                 ...metric,
                 swat_sum: Math.round(swatValue),
@@ -446,103 +446,107 @@ class CoefficientCalculator {
                 coefficient_adjusted: adjustedCoefficient
             });
         }
-        
+
         console.log(`Рассчитано коэффициентов: ${results.length}`);
-        
+
         return results;
     }
-    
+
     displayResults() {
         const container = document.getElementById('resultContainer');
         const table = document.getElementById('resultTable');
         const statsGrid = document.getElementById('statsGrid');
-        
+
         // Обновляем статистику
         this.updateStats(statsGrid);
-        
+
         // Заполняем таблицу
         table.innerHTML = '';
         const displayCount = Math.min(this.results.length, 50);
-        
+
         if (this.results.length === 0) {
             const row = document.createElement('tr');
             row.innerHTML = `<td colspan="13" class="text-center">Нет данных для отображения</td>`;
             table.appendChild(row);
             return;
         }
-        
+
         // Порядок колонок как в Python
         const headerRow = document.createElement('tr');
         headerRow.innerHTML = `
-            <th>Product ID</th>
-            <th>Level 1</th>
-            <th>Level 2</th>
-            <th>Level 3</th>
-            <th>Level 4</th>
-            <th>Sales</th>
-            <th>Demand</th>
-            <th>Prediction Final</th>
-            <th>SWAT</th>
-            <th>Difference</th>
-            <th>Bias %</th>
-            <th>Коэф. Raw</th>
-            <th>Коэф. Adj</th>
-        `;
+        <th>Product ID</th>
+        <th>Level 1</th>
+        <th>Level 2</th>
+        <th>Level 3</th>
+        <th>Level 4</th>
+        <th>Sales</th>
+        <th>Demand</th>
+        <th>Prediction Final</th>
+        <th>SWAT</th>
+        <th>Difference</th>
+        <th>Bias %</th>
+        <th>Коэф. Raw</th>
+        <th>Коэф. Adj</th>
+    `;
         table.appendChild(headerRow);
-        
+
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
-            
-            const coefClass = this.getCoefficientClass(item.coefficient_adjusted);
+
+            // Получаем классы для коэффициентов (передаем true для raw, false для adjusted)
+            const rawCoefClass = this.getCoefficientClass(item.coefficient_raw, true);
+            const adjCoefClass = this.getCoefficientClass(item.coefficient_adjusted, false);
+
+            // Для Difference
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
-            
+
             const biasFormatted = (item.bias_percent || 0).toFixed(3);
-            
+
             row.innerHTML = `
-                <td>${item.product_id || ''}</td>
-                <td>${item.level1 || ''}</td>
-                <td>${item.level2 || ''}</td>
-                <td>${item.level3 || ''}</td>
-                <td>${item.level4 || ''}</td>
-                <td>${item.sales_sum.toLocaleString()}</td>
-                <td>${item.demand_sum.toLocaleString()}</td>
-                <td>${item.prediction_final_sum.toLocaleString()}</td>
-                <td>${item.swat_sum.toLocaleString()}</td>
-                <td class="${diffClass}">${item.difference.toLocaleString()}</td>
-                <td>${biasFormatted}%</td>
-                <td class="${coefClass}">${item.coefficient_raw.toFixed(2)}</td>
-                <td class="${coefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
-            `;
+            <td>${item.product_id || ''}</td>
+            <td>${item.level1 || ''}</td>
+            <td>${item.level2 || ''}</td>
+            <td>${item.level3 || ''}</td>
+            <td>${item.level4 || ''}</td>
+            <td>${item.sales_sum.toLocaleString()}</td>
+            <td>${item.demand_sum.toLocaleString()}</td>
+            <td>${item.prediction_final_sum.toLocaleString()}</td>
+            <td>${item.swat_sum.toLocaleString()}</td>
+            <td class="${diffClass}">${item.difference.toLocaleString()}</td>
+            <td>${biasFormatted}%</td>
+            <td class="${rawCoefClass}">${item.coefficient_raw.toFixed(2)}</td>
+            <td class="${adjCoefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
+        `;
             table.appendChild(row);
         });
-        
+
         if (this.results.length > 50) {
             const infoRow = document.createElement('tr');
             infoRow.innerHTML = `<td colspan="13" class="text-center text-muted">
-                ... и ещё ${this.results.length - 50} строк. Скачайте Excel файл для просмотра всех данных.
-            </td>`;
+            ... и ещё ${this.results.length - 50} строк. Скачайте Excel файл для просмотра всех данных.
+        </td>`;
             table.appendChild(infoRow);
         }
-        
+
         container.style.display = 'block';
         container.scrollIntoView({ behavior: 'smooth' });
     }
-    
+
     updateStats(container) {
         if (!this.results || this.results.length === 0) return;
-        
+
         const total = this.results.length;
         const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
         const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
         const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
-        
+
         const totalSales = this.results.reduce((sum, r) => sum + r.sales_sum, 0);
         const totalDemand = this.results.reduce((sum, r) => sum + r.demand_sum, 0);
         const totalSwat = this.results.reduce((sum, r) => sum + r.swat_sum, 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + r.prediction_final_sum, 0);
         const totalDifference = this.results.reduce((sum, r) => sum + r.difference, 0);
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total : 0;
-        
+
         container.innerHTML = `
             <div class="stat-card">
                 <div class="stat-value">${total}</div>
@@ -578,15 +582,15 @@ class CoefficientCalculator {
             </div>
         `;
     }
-    
+
     async downloadExcel() {
         if (!this.results || this.results.length === 0) {
             this.showAlert('warning', 'Нет данных для экспорта');
             return;
         }
-        
+
         this.showLoading(true);
-        
+
         try {
             // Основной лист с коэффициентами - В ПРАВИЛЬНОМ ПОРЯДКЕ
             const mainData = this.results.map(item => ({
@@ -607,62 +611,62 @@ class CoefficientCalculator {
                 'Writeoffs %': (item.writeoffs_percent || 0) / 100,
                 'Accuracy (final) %': (item.accuracy_final || 0) / 100
             }));
-            
+
             // Лист со статистикой
             const total = this.results.length;
             const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
             const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
             const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
-            
+
             const statsData = [
                 ['Статистика коэффициентов', 'Количество', 'Процент'],
-                ['Коэффициент = 1.00', coef1, `${(coef1/total*100).toFixed(1)}%`],
-                ['Коэффициент = 0.80', coef08, `${(coef08/total*100).toFixed(1)}%`],
-                ['Коэффициент = 1.50', coef15, `${(coef15/total*100).toFixed(1)}%`],
-                ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15)/total*100).toFixed(1)}%`],
+                ['Коэффициент = 1.00', coef1, `${(coef1 / total * 100).toFixed(1)}%`],
+                ['Коэффициент = 0.80', coef08, `${(coef08 / total * 100).toFixed(1)}%`],
+                ['Коэффициент = 1.50', coef15, `${(coef15 / total * 100).toFixed(1)}%`],
+                ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15) / total * 100).toFixed(1)}%`],
                 ['Всего товаров', total, '100%']
             ];
-            
+
             // Создаем рабочую книгу
             const wb = XLSX.utils.book_new();
-            
+
             // Основной лист
             const ws1 = XLSX.utils.json_to_sheet(mainData);
-            
+
             // Автоматически форматируем проценты с 3 знаками после запятой
             const range = XLSX.utils.decode_range(ws1['!ref']);
-            
+
             // Находим колонки с процентами
             const percentColumns = {};
             for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cellAddress = XLSX.utils.encode_cell({r: range.s.r, c: C});
+                const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
                 const cell = ws1[cellAddress];
                 if (cell && (
-                    cell.v === 'Bias %' || 
-                    cell.v === 'OSA %' || 
+                    cell.v === 'Bias %' ||
+                    cell.v === 'OSA %' ||
                     cell.v === 'Writeoffs %' ||
                     cell.v === 'Accuracy (final) %'
                 )) {
                     percentColumns[C] = true;
                 }
             }
-            
+
             // Применяем процентный формат ко всем ячейкам в найденных колонках
             for (let R = range.s.r + 1; R <= range.e.r; ++R) {
                 Object.keys(percentColumns).forEach(col => {
-                    const cellAddress = XLSX.utils.encode_cell({r: R, c: parseInt(col)});
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: parseInt(col) });
                     if (ws1[cellAddress]) {
                         ws1[cellAddress].z = '0.000%';
                     }
                 });
             }
-            
+
             XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
-            
+
             // Лист со статистикой
             const ws2 = XLSX.utils.aoa_to_sheet(statsData);
             XLSX.utils.book_append_sheet(wb, ws2, 'Статистика');
-            
+
             // Лист с информацией
             const infoData = [
                 ['Параметр', 'Значение'],
@@ -679,32 +683,32 @@ class CoefficientCalculator {
             ];
             const ws3 = XLSX.utils.aoa_to_sheet(infoData);
             XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
-            
+
             // Настраиваем ширину колонок
             const colWidths = [
-                {wch: 20}, // Product ID
-                {wch: 15}, // Level 1
-                {wch: 25}, // Level 2
-                {wch: 40}, // Level 3
-                {wch: 12}, // Level 4
-                {wch: 10}, // Sales
-                {wch: 10}, // Demand
-                {wch: 15}, // Prediction Final
-                {wch: 10}, // SWAT
-                {wch: 12}, // Difference
-                {wch: 10}, // Bias %
-                {wch: 15}, // Коэффициент (raw)
-                {wch: 15}, // Коэффициент (adjusted)
-                {wch: 10}, // OSA %
-                {wch: 12}, // Writeoffs %
-                {wch: 15}  // Accuracy (final) %
+                { wch: 20 }, // Product ID
+                { wch: 15 }, // Level 1
+                { wch: 25 }, // Level 2
+                { wch: 40 }, // Level 3
+                { wch: 12 }, // Level 4
+                { wch: 10 }, // Sales
+                { wch: 10 }, // Demand
+                { wch: 15 }, // Prediction Final
+                { wch: 10 }, // SWAT
+                { wch: 12 }, // Difference
+                { wch: 10 }, // Bias %
+                { wch: 15 }, // Коэффициент (raw)
+                { wch: 15 }, // Коэффициент (adjusted)
+                { wch: 10 }, // OSA %
+                { wch: 12 }, // Writeoffs %
+                { wch: 15 }  // Accuracy (final) %
             ];
             ws1['!cols'] = colWidths;
-            
+
             // Сохраняем файл
-            const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
+            const filename = `coefficients_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
             XLSX.writeFile(wb, filename);
-            
+
             this.showAlert('success', `Файл "${filename}" успешно скачан!`);
         } catch (error) {
             console.error('Excel export error:', error);
@@ -713,7 +717,7 @@ class CoefficientCalculator {
             this.showLoading(false);
         }
     }
-    
+
     // Вспомогательные методы
     async readFile(file) {
         return new Promise((resolve, reject) => {
@@ -723,29 +727,29 @@ class CoefficientCalculator {
             reader.readAsText(file, 'UTF-8');
         });
     }
-    
+
     parseCSV(content) {
         try {
             const lines = content.split('\n').filter(line => line.trim() !== '');
             if (lines.length < 2) return [];
-            
+
             const delimiter = ';';
-            
-            const headers = lines[0].split(delimiter).map(h => 
+
+            const headers = lines[0].split(delimiter).map(h =>
                 h.trim().replace(/"/g, '').replace(/\s+/g, ' ')
             );
-            
+
             const result = [];
-            
+
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i];
                 const values = [];
                 let currentValue = '';
                 let inQuotes = false;
-                
+
                 for (let j = 0; j < line.length; j++) {
                     const char = line[j];
-                    
+
                     if (char === '"') {
                         inQuotes = !inQuotes;
                     } else if (char === delimiter && !inQuotes) {
@@ -755,55 +759,55 @@ class CoefficientCalculator {
                         currentValue += char;
                     }
                 }
-                
+
                 values.push(currentValue.trim().replace(/"/g, ''));
-                
+
                 const obj = {};
                 headers.forEach((header, index) => {
                     obj[header] = values[index] !== undefined ? values[index] : '';
                 });
-                
+
                 result.push(obj);
             }
-            
+
             console.log(`Парсинг CSV: заголовки: ${headers}, строк: ${result.length}`);
-            
+
             return result;
         } catch (error) {
             console.error('CSV parsing error:', error);
             return [];
         }
     }
-    
+
     parseNumber(value) {
         if (value === null || value === undefined || value === '') {
             return 0;
         }
-        
+
         let str = String(value).trim();
-        
+
         if (str === '""' || str === '' || str === 'null') {
             return 0;
         }
-        
+
         str = str.replace(/"/g, '');
         str = str.replace(/\s/g, '');
         str = str.replace(/,/g, '.');
-        
+
         const num = parseFloat(str);
         return isNaN(num) ? 0 : num;
     }
-    
+
     createProductId(level1, level4, date) {
         if (!level1 || !level4) return '';
-        
+
         const l1 = String(level1).trim().replace(/\s+/g, '');
         const l4 = String(level4).trim().replace(/\.0$/, '').replace(/"/g, '');
         const d = date ? String(date).trim().replace(/\./g, '') : '';
-        
+
         return `${l1}_${l4}_${d}`;
     }
-    
+
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -811,18 +815,18 @@ class CoefficientCalculator {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-    
+
     getCoefficientClass(coef) {
         if (coef === 1.00) return 'coef-1';
         if (coef === 0.80) return 'coef-08';
         if (coef === 1.50) return 'coef-15';
         return '';
     }
-    
+
     showLoading(show) {
         const loading = document.getElementById('loading');
         const calculateBtn = document.getElementById('calculateBtn');
-        
+
         if (show) {
             loading.style.display = 'block';
             calculateBtn.disabled = true;
@@ -831,21 +835,21 @@ class CoefficientCalculator {
             this.updateCalculateButton();
         }
     }
-    
+
     showAlert(type, message) {
         const container = document.getElementById('alertContainer');
-        
+
         container.innerHTML = '';
-        
+
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-message alert-dismissible fade show`;
         alert.innerHTML = `
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         container.appendChild(alert);
-        
+
         setTimeout(() => {
             if (alert.parentNode) {
                 alert.remove();
@@ -858,3 +862,4 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
