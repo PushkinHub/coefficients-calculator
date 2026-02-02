@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -251,8 +252,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .result-container {
@@ -312,6 +318,7 @@
                 transform: translateX(100%);
                 opacity: 0;
             }
+
             to {
                 transform: translateX(0);
                 opacity: 1;
@@ -390,30 +397,50 @@
                 padding: 1rem;
                 margin: 1rem auto;
             }
-            
+
             .header {
                 padding: 1.5rem;
             }
-            
+
             .header h1 {
                 font-size: 2rem;
             }
-            
+
             .stats-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .btn-calculate {
                 width: 100%;
             }
         }
 
-        .coef-1 { color: var(--success-color); font-weight: bold; }
-        .coef-08 { color: var(--warning-color); font-weight: bold; }
-        .coef-15 { color: var(--accent-color); font-weight: bold; }
-        .positive { color: var(--success-color); }
-        .negative { color: var(--accent-color); }
-        .neutral { color: #666; }
+        .coef-1 {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+
+        .coef-08 {
+            color: var(--warning-color);
+            font-weight: bold;
+        }
+
+        .coef-15 {
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .positive {
+            color: var(--success-color);
+        }
+
+        .negative {
+            color: var(--accent-color);
+        }
+
+        .neutral {
+            color: #666;
+        }
     </style>
     <style>
         .security-banner {
@@ -424,10 +451,11 @@
             border-radius: 8px;
             margin: 1rem 0 1.5rem 0;
             font-size: 0.95rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
-</style>
+    </style>
 </head>
+
 <body>
     <div class="main-container glass-container">
         <div class="header">
@@ -436,18 +464,20 @@
             </div>
             <h1>Калькулятор корректировочных коэффициентов</h1>
             <p class="subtitle">
-                Автоматический расчет коэффициентов для планирования спроса на основе исторических данных и прогнозов SWAT
+                Автоматический расчет коэффициентов для планирования спроса на основе исторических данных и прогнозов
+                SWAT
             </p>
         </div>
         <div class="security-banner alert alert-success border-0 shadow-sm">
             <i class="bi bi-shield-check me-2"></i>
-            <strong>Безопасность данных:</strong> Все файлы обрабатываются исключительно в вашем браузере, ни один документ не покидает ваш компьютер.
+            <strong>Безопасность данных:</strong> Все файлы обрабатываются исключительно в вашем браузере, ни один
+            документ не покидает ваш компьютер.
         </div>
         <div class="rules-container">
             <h2 class="section-title">
                 <i class="bi bi-rulers"></i> Правила корректировки коэффициентов
             </h2>
-            
+
             <div class="row">
                 <div class="col-md-6">
                     <div class="rule-item">
@@ -457,7 +487,7 @@
                             <p>Сначала округление до 2 знаков после запятой</p>
                         </div>
                     </div>
-                    
+
                     <div class="rule-item">
                         <div class="rule-number">2</div>
                         <div>
@@ -466,7 +496,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="col-md-6">
                     <div class="rule-item">
                         <div class="rule-number">3</div>
@@ -475,7 +505,7 @@
                             <p>Значения &lt; 0.8 заменяются на 0.80</p>
                         </div>
                     </div>
-                    
+
                     <div class="rule-item">
                         <div class="rule-number">4</div>
                         <div>
@@ -500,20 +530,22 @@
                         <p><small>Можно загрузить несколько файлов</small></p>
                         <input type="file" id="demandFiles" accept=".csv" multiple style="display: none;">
                     </div>
-                    
+
                     <div class="file-info">
                         <h6><i class="bi bi-info-circle"></i> Требования к файлу:</h6>
                         <ul>
                             <li>Формат: CSV с разделителем ";"</li>
                             <li>Обязательно к заполнениею в table view: level 1-4</li>
-                            <li><a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=378c16e21413">Пример настроенного файла Demand</a></li>
+                            <li><a
+                                    href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=378c16e21413">Пример
+                                    настроенного файла Demand</a></li>
                         </ul>
                     </div>
-                    
+
                     <div id="demandFileList" class="file-list"></div>
                 </div>
             </div>
-            
+
             <div class="col-md-6">
                 <div class="mb-4">
                     <h2 class="section-title">
@@ -526,16 +558,18 @@
                         <p><small>Можно загрузить несколько файлов</small></p>
                         <input type="file" id="swatFiles" accept=".csv" multiple style="display: none;">
                     </div>
-                    
+
                     <div class="file-info">
                         <h6><i class="bi bi-info-circle"></i> Требования к файлу:</h6>
                         <ul>
                             <li>Формат: CSV с разделителем ";"</li>
                             <li>Обязательно к заполнениею в table view: level 1-4</li>
-                            <li><a href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=378c16e21413">Пример настроенного файла Swat</a></li>
+                            <li><a
+                                    href="https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=378c16e21413">Пример
+                                    настроенного файла Swat</a></li>
                         </ul>
                     </div>
-                    
+
                     <div id="swatFileList" class="file-list"></div>
                 </div>
             </div>
@@ -564,65 +598,60 @@
         </div>
 
         <div class="result-container" id="resultContainer">
-    <h2 class="section-title">
-        <i class="bi bi-table"></i> Результаты расчета
-    </h2>
-    
-    <div class="stats-grid" id="statsGrid"></div>
-    
-    <div class="result-container" id="resultContainer">
-        <h2 class="section-title">
-            <i class="bi bi-table"></i> Результаты расчета
-        </h2>
-        
-        <div class="stats-grid" id="statsGrid"></div>
-        
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Product ID</th>
-                        <th>Level 1</th>
-                        <th>Level 2</th>
-                        <th>Level 3</th>
-                        <th>Level 4</th>
-                        <th>Sales</th>
-                        <th>Demand</th>
-                        <th>Prediction Final</th>
-                        <th>SWAT</th>
-                        <th>Difference</th>
-                        <th>Bias %</th>
-                        <th>Коэф. Raw</th>
-                        <th>Коэф. Adj</th>
-                    </tr>
-                </thead>
-                <tbody id="resultTable"></tbody>
-            </table>
-        </div>
-        
-        <div class="text-center mt-4">
-            <button id="downloadBtn" class="btn btn-success btn-lg">
-                <i class="bi bi-download"></i> Скачать полный отчет (Excel)
-            </button>
-        </div>
-    </div>
+            <h2 class="section-title">
+                <i class="bi bi-table"></i> Результаты расчета
+            </h2>
 
-    <div class="footer">
-        <p>Калькулятор коэффициентов Demand/SWAT © 2026</p>
-        <p>Автор Ревазов Данила.<a href="https://t.me/analysis_ds"> Связаться в телеграмм</a></p>
-        <p>Для точных расчетов используйте файлы в правильном формате</p>
-    </div>
+            <div class="stats-grid" id="statsGrid"></div>
 
-    <div id="alertContainer"></div>
+            <div class="result-container" id="resultContainer">
+                <h2 class="section-title">
+                    <i class="bi bi-table"></i> Результаты расчета
+                </h2>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="app.js"></script>
+                <div class="stats-grid" id="statsGrid"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Product ID</th>
+                                <th>Level 1</th>
+                                <th>Level 2</th>
+                                <th>Level 3</th>
+                                <th>Level 4</th>
+                                <th>Sales</th>
+                                <th>Demand</th>
+                                <th>Prediction Final</th>
+                                <th>SWAT</th>
+                                <th>Difference</th>
+                                <th>Bias %</th>
+                                <th>Коэф. Raw</th>
+                                <th>Коэф. Adj</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTable"></tbody>
+                    </table>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button id="downloadBtn" class="btn btn-success btn-lg">
+                        <i class="bi bi-download"></i> Скачать полный отчет (Excel)
+                    </button>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>Калькулятор коэффициентов Demand/SWAT © 2026</p>
+                <p>Автор Ревазов Данила.<a href="https://t.me/analysis_ds"> Связаться в телеграмм</a></p>
+                <p>Для точных расчетов используйте файлы в правильном формате</p>
+            </div>
+
+            <div id="alertContainer"></div>
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+            <script src="app.js"></script>
 </body>
 
 </html>
-
-
-
-
-
