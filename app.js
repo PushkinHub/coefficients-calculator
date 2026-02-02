@@ -216,12 +216,10 @@ class CoefficientCalculator {
 
                 const measure = String(measureRaw).trim().toLowerCase();
                 const value = this.parseNumber(row[valueCol] ?? row[''] ?? row['Unnamed: 8'] ?? row.value ?? row.Value ?? 0);
-                const date = row['date_scale'];
 
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
-                    row['level 4'] || row['level4'],
-                    date
+                    row['level 4'] || row['level4']
                 );
 
                 allData.push({
@@ -230,7 +228,6 @@ class CoefficientCalculator {
                     level2: row['level 2'] || row['level2'] || '',
                     level3: row['level 3'] || row['level3'] || '',
                     level4: row['level 4'] || row['level4'] || '',
-                    date: date,
                     measure: measure,
                     value: value
                 });
@@ -318,17 +315,20 @@ class CoefficientCalculator {
 
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
 
+            // Колонка со значением — как в DEMAND (последняя или не из размерностей)
+            const knownDim = ['level 1', 'level 2', 'level 3', 'level 4', 'level  5', 'level  6', 'date_scale', 'Measure Names'];
+            const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+            const valueCol = headers.find(h => !knownDim.includes(h)) || headers[headers.length - 1] || '';
+
             for (const row of rows) {
                 const measure = row['Measure Names'];
                 if (measure !== 'prediction_swat') continue;
 
-                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
-                const date = row['date_scale'];
+                const value = this.parseNumber(row[valueCol] ?? row[''] ?? row['Unnamed: 8'] ?? row.value ?? row.Value ?? 0);
 
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
-                    row['level 4'] || row['level4'],
-                    date
+                    row['level 4'] || row['level4']
                 );
 
                 allSwat.push({
@@ -337,7 +337,6 @@ class CoefficientCalculator {
                     level2: row['level 2'] || row['level2'] || '',
                     level3: row['level 3'] || row['level3'] || '',
                     level4: row['level 4'] || row['level4'] || '',
-                    date: date,
                     value: value
                 });
             }
@@ -786,14 +785,14 @@ class CoefficientCalculator {
         return isNaN(num) ? 0 : num;
     }
 
-    createProductId(level1, level4, date) {
+    // Как в ноутбуке: product_id = level1 (без пробелов) + level4, без даты — одна строка на товар, суммы по датам
+    createProductId(level1, level4) {
         if (!level1 || !level4) return '';
 
         const l1 = String(level1).trim().replace(/\s+/g, '');
         const l4 = String(level4).trim().replace(/\.0$/, '').replace(/"/g, '');
-        const d = date ? String(date).trim().replace(/\./g, '') : '';
 
-        return `${l1}_${l4}_${d}`;
+        return l1 + l4;
     }
 
     formatFileSize(bytes) {
