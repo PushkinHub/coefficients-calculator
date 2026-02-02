@@ -205,17 +205,17 @@ class CoefficientCalculator {
 
             console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
 
-            // Колонка с числовым значением: последняя или не из списка размерностей (как в ноутбуке)
-            const knownDim = ['level 1', 'level 2', 'level 3', 'level 4', 'level  5', 'level  6', 'date_scale', 'Measure Names'];
+            // Колонка с числом — всегда последняя в CSV (как в ноутбуке)
             const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-            const valueCol = headers.find(h => !knownDim.includes(h)) || headers[headers.length - 1] || '';
+            const valueCol = headers[headers.length - 1] || '';
 
             for (const row of rows) {
                 const measureRaw = row['Measure Names'];
                 if (!measureRaw) continue;
 
                 const measure = String(measureRaw).trim().toLowerCase();
-                const value = this.parseNumber(row[valueCol] ?? row[''] ?? row['Unnamed: 8'] ?? row.value ?? row.Value ?? 0);
+                const rawVal = row[valueCol];
+                const value = this.parseNumber(rawVal !== undefined && rawVal !== '' ? rawVal : 0);
 
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
@@ -315,16 +315,15 @@ class CoefficientCalculator {
 
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
 
-            // Колонка со значением — как в DEMAND (последняя или не из размерностей)
-            const knownDim = ['level 1', 'level 2', 'level 3', 'level 4', 'level  5', 'level  6', 'date_scale', 'Measure Names'];
             const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-            const valueCol = headers.find(h => !knownDim.includes(h)) || headers[headers.length - 1] || '';
+            const valueCol = headers[headers.length - 1] || '';
 
             for (const row of rows) {
                 const measure = row['Measure Names'];
                 if (measure !== 'prediction_swat') continue;
 
-                const value = this.parseNumber(row[valueCol] ?? row[''] ?? row['Unnamed: 8'] ?? row.value ?? row.Value ?? 0);
+                const rawVal = row[valueCol];
+                const value = this.parseNumber(rawVal !== undefined && rawVal !== '' ? rawVal : 0);
 
                 const productId = this.createProductId(
                     row['level 1'] || row['level1'],
@@ -709,7 +708,11 @@ class CoefficientCalculator {
     async readFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
+            reader.onload = (e) => {
+                let text = e.target.result || '';
+                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                resolve(text);
+            };
             reader.onerror = (e) => reject(new Error('Ошибка чтения файла'));
             reader.readAsText(file, 'UTF-8');
         });
@@ -717,7 +720,9 @@ class CoefficientCalculator {
 
     parseCSV(content) {
         try {
-            const lines = content.split('\n').filter(line => line.trim() !== '');
+            if (typeof content !== 'string') return [];
+            content = content.replace(/^\uFEFF/, '');
+            const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) return [];
 
             const delimiter = ';';
