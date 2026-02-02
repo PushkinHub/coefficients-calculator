@@ -597,7 +597,7 @@ class CoefficientCalculator {
             'SWAT': item.swat_sum,
             'Prediction Final': item.prediction_final_sum,
             'Difference': item.difference,
-            // Excel ожидает проценты в формате 0.xx для xx%
+            // Уже в правильном формате для процентов (0.xx = xx%)
             'Bias %': (item.bias_percent || 0) / 100,
             'OSA %': (item.osa_percent || 0) / 100,
             'Writeoffs %': (item.writeoffs_percent || 0) / 100
@@ -623,6 +623,35 @@ class CoefficientCalculator {
         
         // Основной лист
         const ws1 = XLSX.utils.json_to_sheet(mainData);
+        
+        // Автоматически форматируем проценты
+        const range = XLSX.utils.decode_range(ws1['!ref']);
+        
+        // Находим колонки с процентами
+        const percentColumns = {};
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({r: range.s.r, c: C});
+            const cell = ws1[cellAddress];
+            if (cell && (
+                cell.v === 'Bias %' || 
+                cell.v === 'OSA %' || 
+                cell.v === 'Writeoffs %'
+            )) {
+                percentColumns[C] = true;
+            }
+        }
+        
+        // Применяем процентный формат ко всем ячейкам в найденных колонках
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            Object.keys(percentColumns).forEach(col => {
+                const cellAddress = XLSX.utils.encode_cell({r: R, c: parseInt(col)});
+                if (ws1[cellAddress]) {
+                    // Форматируем как проценты с 2 знаками после запятой
+                    ws1[cellAddress].z = '0.00%';
+                }
+            });
+        }
+        
         XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
         
         // Лист со статистикой
@@ -638,18 +667,37 @@ class CoefficientCalculator {
             ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
             ['Формула Difference', 'prediction_final - demand'],
             ['Формула коэффициента', 'demand / swat'],
-            ['Примечание', 'Колонки Bias %, OSA %, Writeoffs % в процентах (например, 0.1786 = 17.86%)'],
+            ['Формат процентов', 'Колонки Bias %, OSA %, Writeoffs % автоматически отформатированы как проценты'],
             ['Количество файлов DEMAND', this.demandFiles.length],
             ['Количество файлов SWAT', this.swatFiles.length]
         ];
         const ws3 = XLSX.utils.aoa_to_sheet(infoData);
         XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
         
+        // Настраиваем ширину колонок для красивого отображения
+        const colWidths = [
+            {wch: 20}, // Product ID
+            {wch: 15}, // Level 1
+            {wch: 25}, // Level 2
+            {wch: 40}, // Level 3
+            {wch: 12}, // Level 4
+            {wch: 15}, // Коэффициент (raw)
+            {wch: 15}, // Коэффициент (adjusted)
+            {wch: 10}, // Demand
+            {wch: 10}, // SWAT
+            {wch: 15}, // Prediction Final
+            {wch: 12}, // Difference
+            {wch: 10}, // Bias %
+            {wch: 10}, // OSA %
+            {wch: 12}  // Writeoffs %
+        ];
+        ws1['!cols'] = colWidths;
+        
         // Сохраняем файл
         const filename = `coefficients_report_${new Date().toISOString().slice(0,10)}.xlsx`;
         XLSX.writeFile(wb, filename);
         
-        this.showAlert('success', `Файл "${filename}" успешно скачан! Откройте его и отформатируйте колонки Bias %, OSA %, Writeoffs % как "Процентный формат".`);
+        this.showAlert('success', `Файл "${filename}" успешно скачан! Проценты уже отформатированы.`);
     } catch (error) {
         console.error('Excel export error:', error);
         this.showAlert('danger', 'Ошибка при создании Excel файла: ' + error.message);
@@ -813,5 +861,6 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
 
 
