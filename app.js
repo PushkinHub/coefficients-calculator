@@ -198,6 +198,9 @@ class CoefficientCalculator {
 
     async processDemandFiles() {
         let allData = [];
+        let salesCount = 0;
+        let demandCount = 0;
+        let predictionCount = 0;
 
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
@@ -206,32 +209,62 @@ class CoefficientCalculator {
             console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
 
             for (const row of rows) {
-                const measure = row['Measure Names'];
+                const measure = row['Measure Names'] || row['MeasureNames'] || row['Measure names'];
                 if (!measure) continue;
 
-                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
-                const date = row['date_scale'];
+                // Исправляем кодировку русских букв
+                const decodeCyrillic = (str) => {
+                    if (!str) return '';
+                    try {
+                        // Если строка уже в нормальной кодировке
+                        if (/[а-яА-Я]/.test(str)) return str;
+                        
+                        // Пробуем декодировать из CP1251/Windows-1251
+                        const decoder = new TextDecoder('windows-1251');
+                        const encoder = new TextEncoder();
+                        const bytes = encoder.encode(str);
+                        return decoder.decode(bytes);
+                    } catch (e) {
+                        return str; // Если не получается, оставляем как есть
+                    }
+                };
 
-                const productId = this.createProductId(
-                    row['level 1'] || row['level1'],
-                    row['level 4'] || row['level4'],
-                    date
-                );
+                const value = this.parseNumber(row[''] || row['Value'] || row['value'] || 0);
+                const date = row['date_scale'] || row['date scale'];
+
+                const level1 = decodeCyrillic(row['level 1'] || row['level1'] || '');
+                const level4 = decodeCyrillic(row['level 4'] || row['level4'] || '');
+
+                const productId = this.createProductId(level1, level4, date);
 
                 allData.push({
                     product_id: productId,
-                    level1: row['level 1'] || row['level1'] || '',
-                    level2: row['level 2'] || row['level2'] || '',
-                    level3: row['level 3'] || row['level3'] || '',
-                    level4: row['level 4'] || row['level4'] || '',
+                    level1: level1,
+                    level2: decodeCyrillic(row['level 2'] || row['level2'] || ''),
+                    level3: decodeCyrillic(row['level 3'] || row['level3'] || ''),
+                    level4: level4,
                     date: date,
-                    measure: measure,
+                    measure: measure.trim().toLowerCase(),
                     value: value
                 });
+
+                // Считаем типы мер
+                const measureLower = measure.trim().toLowerCase();
+                if (measureLower === 'sales') salesCount++;
+                if (measureLower === 'demand') demandCount++;
+                if (measureLower === 'prediction_final') predictionCount++;
             }
         }
 
         console.log(`Всего записей в DEMAND: ${allData.length}`);
+        console.log(`Sales записей: ${salesCount}`);
+        console.log(`Demand записей: ${demandCount}`);
+        console.log(`Prediction записей: ${predictionCount}`);
+        
+        if (allData.length > 0) {
+            console.log('Пример первой записи:', allData[0]);
+            console.log('Measure в первой записи:', allData[0].measure);
+        }
 
         // Группируем по product_id и measure
         const grouped = {};
@@ -251,6 +284,8 @@ class CoefficientCalculator {
             }
             grouped[key].values.push(item.value);
         });
+
+        console.log(`Сгруппировано записей: ${Object.keys(grouped).length}`);
 
         // Суммируем значения для каждой группы
         const aggregated = {};
@@ -284,7 +319,7 @@ class CoefficientCalculator {
                 case 'prediction_final':
                     aggregated[group.product_id].prediction_final = sum;
                     break;
-                case 'OSA':
+                case 'osa':
                     aggregated[group.product_id].osa = sum / group.values.length; // среднее
                     break;
                 case 'writeoffs_perc':
@@ -299,6 +334,17 @@ class CoefficientCalculator {
             }
         });
 
+        const aggregatedValues = Object.values(aggregated);
+        console.log(`Агрегированных товаров: ${aggregatedValues.length}`);
+        
+        if (aggregatedValues.length > 0) {
+            const sampleItem = aggregatedValues[0];
+            console.log('Пример агрегированного товара:', sampleItem);
+            console.log(`Sales в примере: ${sampleItem.sales}`);
+            console.log(`Demand в примере: ${sampleItem.demand}`);
+            console.log(`Prediction в примере: ${sampleItem.prediction_final}`);
+        }
+
         return Object.values(aggregated);
     }
 
@@ -312,24 +358,37 @@ class CoefficientCalculator {
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
 
             for (const row of rows) {
-                const measure = row['Measure Names'];
-                if (measure !== 'prediction_swat') continue;
+                const measure = row['Measure Names'] || row['MeasureNames'] || row['Measure names'];
+                if (!measure || measure.trim().toLowerCase() !== 'prediction_swat') continue;
 
-                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
-                const date = row['date_scale'];
+                const value = this.parseNumber(row[''] || row['Value'] || row['value'] || 0);
+                const date = row['date_scale'] || row['date scale'];
 
-                const productId = this.createProductId(
-                    row['level 1'] || row['level1'],
-                    row['level 4'] || row['level4'],
-                    date
-                );
+                // Исправляем кодировку русских букв
+                const decodeCyrillic = (str) => {
+                    if (!str) return '';
+                    try {
+                        if (/[а-яА-Я]/.test(str)) return str;
+                        const decoder = new TextDecoder('windows-1251');
+                        const encoder = new TextEncoder();
+                        const bytes = encoder.encode(str);
+                        return decoder.decode(bytes);
+                    } catch (e) {
+                        return str;
+                    }
+                };
+
+                const level1 = decodeCyrillic(row['level 1'] || row['level1'] || '');
+                const level4 = decodeCyrillic(row['level 4'] || row['level4'] || '');
+
+                const productId = this.createProductId(level1, level4, date);
 
                 allSwat.push({
                     product_id: productId,
-                    level1: row['level 1'] || row['level1'] || '',
-                    level2: row['level 2'] || row['level2'] || '',
-                    level3: row['level 3'] || row['level3'] || '',
-                    level4: row['level 4'] || row['level4'] || '',
+                    level1: level1,
+                    level2: decodeCyrillic(row['level 2'] || row['level2'] || ''),
+                    level3: decodeCyrillic(row['level 3'] || row['level3'] || ''),
+                    level4: level4,
                     date: date,
                     value: value
                 });
@@ -380,6 +439,8 @@ class CoefficientCalculator {
             const salesRounded = Math.round(item.sales);
             const predictionRounded = Math.round(item.prediction_final);
 
+            console.log(`Товар ${item.product_id}: sales=${item.sales}, demand=${item.demand}, prediction=${item.prediction_final}`);
+
             // Difference
             const difference = predictionRounded - demandRounded;
 
@@ -405,6 +466,9 @@ class CoefficientCalculator {
         });
 
         console.log(`Рассчитано метрик: ${results.length}`);
+        if (results.length > 0) {
+            console.log('Первая метрика:', results[0]);
+        }
 
         return results;
     }
@@ -448,6 +512,7 @@ class CoefficientCalculator {
         }
 
         console.log(`Рассчитано коэффициентов: ${results.length}`);
+        console.log('Пример результата с sales:', results[0]);
 
         return results;
     }
@@ -456,6 +521,13 @@ class CoefficientCalculator {
         const container = document.getElementById('resultContainer');
         const table = document.getElementById('resultTable');
         const statsGrid = document.getElementById('statsGrid');
+
+        console.log('Отображаем результаты:', this.results);
+        
+        if (this.results && this.results.length > 0) {
+            console.log('Первый результат:', this.results[0]);
+            console.log('Sales в первом результате:', this.results[0].sales_sum);
+        }
 
         // Обновляем статистику
         this.updateStats(statsGrid);
@@ -724,6 +796,7 @@ class CoefficientCalculator {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
             reader.onerror = (e) => reject(new Error('Ошибка чтения файла'));
+            // Пробуем разные кодировки
             reader.readAsText(file, 'UTF-8');
         });
     }
@@ -733,16 +806,34 @@ class CoefficientCalculator {
             const lines = content.split('\n').filter(line => line.trim() !== '');
             if (lines.length < 2) return [];
 
-            const delimiter = ';';
+            // Автоматическое определение разделителя
+            let delimiter = ';';
+            const firstLine = lines[0];
+            
+            // Если есть табуляции, используем табуляцию как разделитель
+            if (firstLine.includes('\t')) {
+                delimiter = '\t';
+                console.log('Определен разделитель: табуляция (\\t)');
+            } else if (firstLine.includes(';')) {
+                delimiter = ';';
+                console.log('Определен разделитель: точка с запятой (;)');
+            } else if (firstLine.includes(',')) {
+                delimiter = ',';
+                console.log('Определен разделитель: запятая (,)');
+            }
 
-            const headers = lines[0].split(delimiter).map(h =>
+            const headers = firstLine.split(delimiter).map(h =>
                 h.trim().replace(/"/g, '').replace(/\s+/g, ' ')
             );
+
+            console.log('Заголовки CSV:', headers);
 
             const result = [];
 
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i];
+                if (line.trim() === '') continue;
+
                 const values = [];
                 let currentValue = '';
                 let inQuotes = false;
@@ -770,11 +861,16 @@ class CoefficientCalculator {
                 result.push(obj);
             }
 
-            console.log(`Парсинг CSV: заголовки: ${headers}, строк: ${result.length}`);
+            console.log(`Парсинг CSV: заголовки: ${headers.length}, строк: ${result.length}`);
+            if (result.length > 0) {
+                console.log('Первая строка данных:', result[0]);
+                console.log('Measure Names в первой строке:', result[0]['Measure Names']);
+            }
 
             return result;
         } catch (error) {
             console.error('CSV parsing error:', error);
+            console.error('Content sample:', content.substring(0, 500));
             return [];
         }
     }
@@ -880,5 +976,3 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
-
-
