@@ -592,7 +592,7 @@ class CoefficientCalculator {
         this.showLoading(true);
 
         try {
-            // Основной лист с коэффициентами - В ПРАВИЛЬНОМ ПОРЯДКЕ
+            // Порядок колонок: Sales, Demand, Prediction Final, SWAT, Difference, Коэф (raw), Коэф (adjusted), Bias %, OSA %, Writeoffs %
             const mainData = this.results.map(item => ({
                 'Product ID': item.product_id,
                 'Level 1': item.level1,
@@ -604,9 +604,9 @@ class CoefficientCalculator {
                 'Prediction Final': item.prediction_final_sum,
                 'SWAT': item.swat_sum,
                 'Difference': item.difference,
-                'Bias %': (item.bias_percent || 0) / 100,
                 'Коэффициент (raw)': item.coefficient_raw,
                 'Коэффициент (adjusted)': item.coefficient_adjusted,
+                'Bias %': (item.bias_percent || 0) / 100,
                 'OSA %': (item.osa_percent || 0) / 100,
                 'Writeoffs %': (item.writeoffs_percent || 0) / 100
             }));
@@ -632,10 +632,9 @@ class CoefficientCalculator {
             // Основной лист
             const ws1 = XLSX.utils.json_to_sheet(mainData);
 
-            // Автоматически форматируем проценты с 3 знаками после запятой
+            // Формат процентов: 1 знак после запятой (Bias %, OSA %, Writeoffs %)
             const range = XLSX.utils.decode_range(ws1['!ref']);
 
-            // Находим колонки с процентами
             const percentColumns = {};
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
@@ -649,12 +648,11 @@ class CoefficientCalculator {
                 }
             }
 
-            // Применяем процентный формат ко всем ячейкам в найденных колонках
             for (let R = range.s.r + 1; R <= range.e.r; ++R) {
                 Object.keys(percentColumns).forEach(col => {
                     const cellAddress = XLSX.utils.encode_cell({ r: R, c: parseInt(col) });
                     if (ws1[cellAddress]) {
-                        ws1[cellAddress].z = '0.000%';
+                        ws1[cellAddress].z = '0.0%';
                     }
                 });
             }
@@ -671,8 +669,8 @@ class CoefficientCalculator {
                 ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
-                ['Порядок колонок', 'Sales, Demand, Prediction Final, SWAT, Difference, Bias %, Коэффициенты'],
-                ['Формат процентов', 'Bias %, OSA %, Writeoffs % отформатированы как проценты с 3 знаками после запятой'],
+                ['Порядок колонок', 'Sales, Demand, Prediction Final, SWAT, Difference, Коэф (raw), Коэф (adjusted), Bias %, OSA %, Writeoffs %'],
+                ['Формат процентов', 'Bias %, OSA %, Writeoffs % — 1 знак после запятой'],
                 ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
                 ['Формула Difference', 'prediction_final - demand'],
                 ['Формула коэффициента', 'demand / swat'],
@@ -682,7 +680,7 @@ class CoefficientCalculator {
             const ws3 = XLSX.utils.aoa_to_sheet(infoData);
             XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
 
-            // Настраиваем ширину колонок
+            // Настраиваем ширину колонок (порядок как в mainData)
             const colWidths = [
                 { wch: 20 }, // Product ID
                 { wch: 15 }, // Level 1
@@ -694,16 +692,18 @@ class CoefficientCalculator {
                 { wch: 15 }, // Prediction Final
                 { wch: 10 }, // SWAT
                 { wch: 12 }, // Difference
-                { wch: 10 }, // Bias %
                 { wch: 15 }, // Коэффициент (raw)
                 { wch: 15 }, // Коэффициент (adjusted)
+                { wch: 10 }, // Bias %
                 { wch: 10 }, // OSA %
                 { wch: 12 }  // Writeoffs %
             ];
             ws1['!cols'] = colWidths;
 
-            // Сохраняем файл
-            const filename = `coefficients_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            // Уникальное имя файла: дата и время до секунд
+            const now = new Date();
+            const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + '-' + String(now.getMinutes()).padStart(2, '0') + '-' + String(now.getSeconds()).padStart(2, '0');
+            const filename = `coefficients_report_${ts}.xlsx`;
             XLSX.writeFile(wb, filename);
 
             this.showAlert('success', `Файл "${filename}" успешно скачан!`);
