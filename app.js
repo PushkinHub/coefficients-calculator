@@ -320,42 +320,55 @@ class CoefficientCalculator {
     }
     
     calculateCoefficients(swatData, demandMetrics) {
-        const results = [];
-        
-        const swatMap = new Map();
+    const results = [];
+    
+    // Преобразуем swatData в Map
+    const swatMap = new Map();
+    
+    // Если swatData - объект (результат aggregateData)
+    if (swatData && typeof swatData === 'object' && !Array.isArray(swatData)) {
+        // Это объект вида { product_id: { value: X, ... }, ... }
+        Object.keys(swatData).forEach(productId => {
+            swatMap.set(productId, swatData[productId].value);
+        });
+    } 
+    // Если swatData уже массив
+    else if (Array.isArray(swatData)) {
         swatData.forEach(item => {
             swatMap.set(item.product_id, item.value);
         });
+    }
+    
+    // Остальной код оставляем без изменений...
+    for (const metric of demandMetrics) {
+        const swatValue = swatMap.get(metric.product_id) || 0;
         
-        for (const metric of demandMetrics) {
-            const swatValue = swatMap.get(metric.product_id) || 0;
-            
-            // Исходный коэффициент
-            const exactCoefficient = swatValue !== 0 ? metric.demand_sum / swatValue : 0;
-            
-            // Округление до 2 знаков
-            const rawCoefficient = Math.round(exactCoefficient * 100) / 100;
-            
-            // Применение правил корректировки
-            let adjustedCoefficient = rawCoefficient;
-            if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
-                adjustedCoefficient = 1.00;
-            } else if (rawCoefficient < 0.8) {
-                adjustedCoefficient = 0.80;
-            } else if (rawCoefficient > 1.5) {
-                adjustedCoefficient = 1.50;
-            }
-            
-            results.push({
-                ...metric,
-                swat_sum: Math.round(swatValue),
-                coefficient_raw: rawCoefficient,
-                coefficient_adjusted: adjustedCoefficient
-            });
+        // Исходный коэффициент
+        const exactCoefficient = swatValue !== 0 ? metric.demand_sum / swatValue : 0;
+        
+        // Округление до 2 знаков
+        const rawCoefficient = Math.round(exactCoefficient * 100) / 100;
+        
+        // Применение правил корректировки
+        let adjustedCoefficient = rawCoefficient;
+        if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
+            adjustedCoefficient = 1.00;
+        } else if (rawCoefficient < 0.8) {
+            adjustedCoefficient = 0.80;
+        } else if (rawCoefficient > 1.5) {
+            adjustedCoefficient = 1.50;
         }
         
-        return results;
+        results.push({
+            ...metric,
+            swat_sum: Math.round(swatValue),
+            coefficient_raw: rawCoefficient,
+            coefficient_adjusted: adjustedCoefficient
+        });
     }
+    
+    return results;
+}
     
     displayResults() {
         const container = document.getElementById('resultContainer');
@@ -667,4 +680,5 @@ class CoefficientCalculator {
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
+
 });
