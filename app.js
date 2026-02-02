@@ -816,10 +816,28 @@ class CoefficientCalculator {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    getCoefficientClass(coef) {
-        if (coef === 1.00) return 'coef-1';
-        if (coef === 0.80) return 'coef-08';
-        if (coef === 1.50) return 'coef-15';
+    getCoefficientClass(coef, isRaw = false) {
+        // Проверка на ноль или очень маленькие значения
+        if (coef === 0 || coef <= 0.8) {
+            return 'coef-08'; // желтый
+        }
+
+        // Проверка на большие значения
+        if (coef >= 1.5) {
+            return 'coef-15'; // красный
+        }
+
+        // Только для raw коэффициента: диапазон 0.96-1.04
+        if (isRaw && coef >= 0.96 && coef <= 1.04) {
+            return 'coef-1'; // зеленый
+        }
+
+        // Для adjusted коэффициента: если точно 1.00 (после замены)
+        if (!isRaw && coef === 1.00) {
+            return 'coef-1'; // зеленый
+        }
+
+        // Для всего остального - пустая строка (обычный черный шрифт)
         return '';
     }
 
@@ -862,4 +880,5 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
 
