@@ -172,29 +172,21 @@ class CoefficientCalculator {
         progressContainer.style.display = 'block';
         
         // Шаг 1: Загрузка и обработка DEMAND файлов
-        let progress = 0;
-        const totalSteps = 4;
-        
         progressFill.style.width = '25%';
         progressText.textContent = '25%';
         const demandData = await this.processDemandFiles();
         
-        progress = 25;
+        // Шаг 2: Загрузка и обработка SWAT файлов
         progressFill.style.width = '50%';
         progressText.textContent = '50%';
         const swatData = await this.processSwatFiles();
         
-        // Отладочная информация
-        console.log('SWAT data structure:', swatData);
-        console.log('SWAT data type:', typeof swatData);
-        console.log('Is array?', Array.isArray(swatData));
-        
-        progress = 50;
+        // Шаг 3: Расчет метрик
         progressFill.style.width = '75%';
         progressText.textContent = '75%';
         const demandMetrics = this.calculateMetrics(demandData);
         
-        progress = 75;
+        // Шаг 4: Расчет коэффициентов
         progressFill.style.width = '100%';
         progressText.textContent = '100%';
         const results = this.calculateCoefficients(swatData, demandMetrics);
@@ -214,23 +206,25 @@ class CoefficientCalculator {
             const content = await this.readFile(file);
             const rows = this.parseCSV(content);
             
+            console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
+            
             for (const row of rows) {
-                const measure = this.getColumnValue(row, ['Measure Names', 'Measure_Names', 'measure_names']);
-                const value = this.parseNumber(row.value || row.Value);
+                const measure = row['Measure Names'];
+                if (!measure) continue;
                 
-                if (!measure || value === null) continue;
+                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
                 
                 const productId = this.createProductId(
-                    this.getColumnValue(row, ['level 1', 'level1', 'Level1']),
-                    this.getColumnValue(row, ['level 4', 'level4', 'Level4'])
+                    row['level 1'],
+                    row['level 4']
                 );
                 
                 const item = {
                     product_id: productId,
-                    level1: this.getColumnValue(row, ['level 1', 'level1', 'Level1']),
-                    level2: this.getColumnValue(row, ['level 2', 'level2', 'Level2']),
-                    level3: this.getColumnValue(row, ['level 3', 'level3', 'Level3']),
-                    level4: this.getColumnValue(row, ['level 4', 'level4', 'Level4']),
+                    level1: row['level 1'],
+                    level2: row['level 2'],
+                    level3: row['level 3'],
+                    level4: row['level 4'],
                     value: value
                 };
                 
@@ -246,7 +240,9 @@ class CoefficientCalculator {
             }
         }
         
-        // Агрегируем данные в массивы
+        console.log(`Demand записи: ${allDemand.length}, Prediction записи: ${allPrediction.length}`);
+        
+        // Агрегируем данные
         return {
             demand: this.aggregateToArray(allDemand, 'sum'),
             prediction: this.aggregateToArray(allPrediction, 'sum'),
@@ -262,27 +258,31 @@ class CoefficientCalculator {
             const content = await this.readFile(file);
             const rows = this.parseCSV(content);
             
+            console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
+            
             for (const row of rows) {
-                const measure = this.getColumnValue(row, ['Measure Names', 'Measure_Names', 'measure_names']);
-                const value = this.parseNumber(row.value || row.Value);
+                const measure = row['Measure Names'];
+                if (measure !== 'prediction_swat') continue;
                 
-                if (measure !== 'prediction_swat' || value === null) continue;
+                const value = this.parseNumber(row[''] || row.value || row.Value || 0);
                 
                 const productId = this.createProductId(
-                    this.getColumnValue(row, ['level 1', 'level1', 'Level1']),
-                    this.getColumnValue(row, ['level 4', 'level4', 'Level4'])
+                    row['level 1'],
+                    row['level 4']
                 );
                 
                 allSwat.push({
                     product_id: productId,
-                    level1: this.getColumnValue(row, ['level 1', 'level1', 'Level1']),
-                    level2: this.getColumnValue(row, ['level 2', 'level2', 'Level2']),
-                    level3: this.getColumnValue(row, ['level 3', 'level3', 'Level3']),
-                    level4: this.getColumnValue(row, ['level 4', 'level4', 'Level4']),
+                    level1: row['level 1'],
+                    level2: row['level 2'],
+                    level3: row['level 3'],
+                    level4: row['level 4'],
                     value: value
                 });
             }
         }
+        
+        console.log(`SWAT записи: ${allSwat.length}`);
         
         // Возвращаем массив агрегированных данных
         return this.aggregateToArray(allSwat, 'sum');
@@ -293,6 +293,8 @@ class CoefficientCalculator {
         const aggregated = {};
         
         data.forEach(item => {
+            if (!item.product_id) return;
+            
             if (!aggregated[item.product_id]) {
                 aggregated[item.product_id] = {
                     product_id: item.product_id,
@@ -338,44 +340,60 @@ class CoefficientCalculator {
         // Заполняем Map'ы
         if (Array.isArray(demandData.demand)) {
             demandData.demand.forEach(item => {
-                demandMap.set(item.product_id, item);
+                if (item && item.product_id) {
+                    demandMap.set(item.product_id, item);
+                }
             });
         }
         
         if (Array.isArray(demandData.prediction)) {
             demandData.prediction.forEach(item => {
-                predictionMap.set(item.product_id, item);
+                if (item && item.product_id) {
+                    predictionMap.set(item.product_id, item);
+                }
             });
         }
         
         if (Array.isArray(demandData.osa)) {
             demandData.osa.forEach(item => {
-                osaMap.set(item.product_id, item);
+                if (item && item.product_id) {
+                    osaMap.set(item.product_id, item);
+                }
             });
         }
         
         if (Array.isArray(demandData.writeoffs)) {
             demandData.writeoffs.forEach(item => {
-                writeoffsMap.set(item.product_id, item);
+                if (item && item.product_id) {
+                    writeoffsMap.set(item.product_id, item);
+                }
             });
         }
         
+        console.log(`Уникальных товаров в demand: ${demandMap.size}`);
+        
         // Обрабатываем все demand записи
         for (const [productId, demandItem] of demandMap) {
+            if (!demandItem) continue;
+            
             const demand = demandItem;
             const prediction = predictionMap.get(productId) || { value: 0 };
             const osa = osaMap.get(productId) || { value: 0 };
             const writeoffs = writeoffsMap.get(productId) || { value: 0 };
             
+            // Значения
+            const demandValue = demand.value || 0;
+            const predictionValue = prediction.value || 0;
+            
             // Округление
-            const demandRounded = Math.round(demand.value);
-            const predictionRounded = Math.round(prediction.value);
+            const demandRounded = Math.round(demandValue);
+            const predictionRounded = Math.round(predictionValue);
             
             // Difference
             const difference = predictionRounded - demandRounded;
             
             // Bias %
-            const bias = demandRounded !== 0 ? ((difference) / demandRounded * 100) : 0;
+            const bias = demandRounded !== 0 ? (difference / demandRounded * 100) : 0;
             
             results.push({
                 product_id: productId,
@@ -392,6 +410,8 @@ class CoefficientCalculator {
             });
         }
         
+        console.log(`Рассчитано метрик: ${results.length}`);
+        
         return results;
     }
     
@@ -401,33 +421,36 @@ class CoefficientCalculator {
         // Преобразуем swatData в Map
         const swatMap = new Map();
         
-        // Проверяем тип swatData
         if (Array.isArray(swatData)) {
-            // Если это массив
             swatData.forEach(item => {
-                swatMap.set(item.product_id, item.value);
-            });
-        } else if (typeof swatData === 'object' && swatData !== null) {
-            // Если это объект (резервный вариант)
-            Object.keys(swatData).forEach(productId => {
-                if (swatData[productId] && typeof swatData[productId] === 'object') {
-                    swatMap.set(productId, swatData[productId].value || 0);
+                if (item && item.product_id) {
+                    swatMap.set(item.product_id, item.value || 0);
                 }
             });
         }
         
+        console.log(`Уникальных товаров в SWAT: ${swatMap.size}`);
+        
         for (const metric of demandMetrics) {
             const swatValue = swatMap.get(metric.product_id) || 0;
+            const demandValue = metric.demand_sum || 0;
             
             // Исходный коэффициент
-            const exactCoefficient = swatValue !== 0 ? metric.demand_sum / swatValue : 0;
+            let exactCoefficient = 0;
+            if (swatValue !== 0 && demandValue !== 0) {
+                exactCoefficient = demandValue / swatValue;
+            }
             
             // Округление до 2 знаков
             const rawCoefficient = Math.round(exactCoefficient * 100) / 100;
             
             // Применение правил корректировки
             let adjustedCoefficient = rawCoefficient;
-            if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
+            
+            // Проверяем NaN и бесконечность
+            if (isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
+                adjustedCoefficient = 0.8;
+            } else if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
                 adjustedCoefficient = 1.00;
             } else if (rawCoefficient < 0.8) {
                 adjustedCoefficient = 0.80;
@@ -443,6 +466,8 @@ class CoefficientCalculator {
             });
         }
         
+        console.log(`Рассчитано коэффициентов: ${results.length}`);
+        
         return results;
     }
     
@@ -457,6 +482,14 @@ class CoefficientCalculator {
         // Заполняем таблицу
         table.innerHTML = '';
         const displayCount = Math.min(this.results.length, 50);
+        
+        if (this.results.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="9" class="text-center">Нет данных для отображения</td>`;
+            table.appendChild(row);
+            return;
+        }
+        
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
             
@@ -465,7 +498,7 @@ class CoefficientCalculator {
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
             
             row.innerHTML = `
-                <td>${item.product_id}</td>
+                <td>${item.product_id || ''}</td>
                 <td>${item.level3 || ''}</td>
                 <td class="${coefClass}">${item.coefficient_raw.toFixed(2)}</td>
                 <td class="${coefClass}">${item.coefficient_adjusted.toFixed(2)}</td>
@@ -504,7 +537,7 @@ class CoefficientCalculator {
         const totalSwat = this.results.reduce((sum, r) => sum + r.swat_sum, 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + r.prediction_final_sum, 0);
         const totalDifference = this.results.reduce((sum, r) => sum + r.difference, 0);
-        const avgBias = this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total;
+        const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + r.bias_percent, 0) / total : 0;
         
         container.innerHTML = `
             <div class="stat-card">
@@ -564,7 +597,7 @@ class CoefficientCalculator {
                 'SWAT': item.swat_sum,
                 'Prediction Final': item.prediction_final_sum,
                 'Difference': item.difference,
-                'Bias %': item.bias_percent / 100, // Excel ожидает проценты в десятичной форме
+                'Bias %': item.bias_percent / 100,
                 'OSA %': item.osa_percent / 100,
                 'Writeoffs %': item.writeoffs_percent / 100
             }));
@@ -602,7 +635,10 @@ class CoefficientCalculator {
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
                 ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
-                ['Формула Difference', 'prediction_final - demand']
+                ['Формула Difference', 'prediction_final - demand'],
+                ['Формула коэффициента', 'demand / swat'],
+                ['Количество файлов DEMAND', this.demandFiles.length],
+                ['Количество файлов SWAT', this.swatFiles.length]
             ];
             const ws3 = XLSX.utils.aoa_to_sheet(infoData);
             XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
@@ -632,22 +668,27 @@ class CoefficientCalculator {
     
     parseCSV(content) {
         try {
-            const lines = content.split('\n').filter(line => line.trim());
-            if (lines.length === 0) return [];
+            const lines = content.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) return [];
             
-            // Определяем разделитель
-            const delimiter = this.detectDelimiter(lines[0]);
+            // Разделитель - точка с запятой
+            const delimiter = ';';
             
-            const headers = lines[0].split(delimiter).map(h => h.trim().replace(/"/g, ''));
+            // Извлекаем заголовки
+            const headers = lines[0].split(delimiter).map(h => 
+                h.trim().replace(/"/g, '').replace(/\s+/g, ' ')
+            );
             
-            return lines.slice(1).map(line => {
-                // Обрабатываем строку с учетом возможных кавычек
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
                 const values = [];
-                let inQuotes = false;
                 let currentValue = '';
+                let inQuotes = false;
                 
-                for (let i = 0; i < line.length; i++) {
-                    const char = line[i];
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
                     
                     if (char === '"') {
                         inQuotes = !inQuotes;
@@ -658,37 +699,42 @@ class CoefficientCalculator {
                         currentValue += char;
                     }
                 }
+                
+                // Добавляем последнее значение
                 values.push(currentValue.trim().replace(/"/g, ''));
                 
+                // Создаем объект
                 const obj = {};
                 headers.forEach((header, index) => {
-                    obj[header] = values[index] || '';
+                    obj[header] = values[index] !== undefined ? values[index] : '';
                 });
-                return obj;
-            });
+                
+                result.push(obj);
+            }
+            
+            console.log(`Парсинг CSV: заголовки: ${headers}, строк: ${result.length}`);
+            
+            return result;
         } catch (error) {
             console.error('CSV parsing error:', error);
             return [];
         }
     }
     
-    detectDelimiter(firstLine) {
-        const semicolonCount = (firstLine.match(/;/g) || []).length;
-        const commaCount = (firstLine.match(/,/g) || []).length;
-        const tabCount = (firstLine.match(/\t/g) || []).length;
-        
-        if (semicolonCount > commaCount && semicolonCount > tabCount) return ';';
-        if (commaCount > semicolonCount && commaCount > tabCount) return ',';
-        if (tabCount > semicolonCount && tabCount > commaCount) return '\t';
-        
-        // По умолчанию используем точку с запятой
-        return ';';
-    }
-    
     parseNumber(value) {
-        if (!value && value !== 0) return 0;
+        if (value === null || value === undefined || value === '') {
+            return 0;
+        }
         
         let str = String(value).trim();
+        
+        // Если пустая строка
+        if (str === '""' || str === '' || str === 'null') {
+            return 0;
+        }
+        
+        // Убираем кавычки если есть
+        str = str.replace(/"/g, '');
         
         // Убираем пробелы (разделители тысяч)
         str = str.replace(/\s/g, '');
@@ -696,29 +742,16 @@ class CoefficientCalculator {
         // Заменяем запятую на точку для десятичных чисел
         str = str.replace(/,/g, '.');
         
-        // Убираем символы процента
-        if (str.includes('%')) {
-            str = str.replace(/%/g, '');
-            const num = parseFloat(str);
-            return isNaN(num) ? 0 : num / 100;
-        }
-        
         const num = parseFloat(str);
         return isNaN(num) ? 0 : num;
     }
     
-    getColumnValue(row, possibleNames) {
-        for (const name of possibleNames) {
-            if (row[name] !== undefined && row[name] !== '') {
-                return row[name];
-            }
-        }
-        return '';
-    }
-    
     createProductId(level1, level4) {
-        const l1 = String(level1 || '').trim().replace(/\s+/g, '');
-        const l4 = String(level4 || '').trim().replace(/\.0$/, '');
+        if (!level1 || !level4) return '';
+        
+        const l1 = String(level1).trim().replace(/\s+/g, '');
+        const l4 = String(level4).trim().replace(/\.0$/, '').replace(/"/g, '');
+        
         return l1 + l4;
     }
     
