@@ -564,31 +564,41 @@
         </div>
 
         <div class="result-container" id="resultContainer">
-            <h2 class="section-title">
-                <i class="bi bi-table"></i> Результаты расчета
-            </h2>
-            
-            <div class="stats-grid" id="statsGrid"></div>
-            
-            <div class="table-responsive">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Product ID</th>
-                            <th>Level 3</th>
-                            <th>Коэф. Raw</th>
-                            <th>Коэф. Adj</th>
-                            <th>Sales</th>
-                            <th>Demand</th>
-                            <th>Prediction</th>
-                            <th>SWAT</th>
-                            <th>Difference</th>
-                            <th>Bias %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultTable"></tbody>
-                </table>
-            </div>
+    <h2 class="section-title">
+        <i class="bi bi-table"></i> Результаты расчета
+    </h2>
+    
+    <div class="stats-grid" id="statsGrid"></div>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Product ID</th>
+                    <th>Level 1</th>
+                    <th>Level 2</th>
+                    <th>Level 3</th>
+                    <th>Level 4</th>
+                    <th>Sales</th>
+                    <th>Demand</th>
+                    <th>Prediction Final</th>
+                    <th>SWAT</th>
+                    <th>Difference</th>
+                    <th>Bias %</th>
+                    <th>Коэф. Raw</th>
+                    <th>Коэф. Adj</th>
+                </tr>
+            </thead>
+            <tbody id="resultTable"></tbody>
+        </table>
+    </div>
+    
+    <div class="text-center mt-4">
+        <button id="downloadBtn" class="btn btn-success btn-lg">
+            <i class="bi bi-download"></i> Скачать полный отчет (Excel)
+        </button>
+    </div>
+    </div>
             
             <div class="text-center mt-4">
                 <button id="downloadBtn" class="btn btn-success btn-lg">
@@ -612,6 +622,7 @@
 </body>
 
 </html>
+
 
 
 
