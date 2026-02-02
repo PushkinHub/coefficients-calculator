@@ -616,6 +616,7 @@ class CoefficientCalculator {
             const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
             const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
             const coef15 = this.results.filter(r => r.coefficient_adjusted === 1.50).length;
+            const coefReplacedFromZero = this.results.filter(r => r.coefficient_raw === 0).length;
 
             const statsData = [
                 ['Статистика коэффициентов', 'Количество', 'Процент'],
@@ -623,6 +624,7 @@ class CoefficientCalculator {
                 ['Коэффициент = 0.80', coef08, `${(coef08 / total * 100).toFixed(1)}%`],
                 ['Коэффициент = 1.50', coef15, `${(coef15 / total * 100).toFixed(1)}%`],
                 ['Другие коэффициенты', total - coef1 - coef08 - coef15, `${((total - coef1 - coef08 - coef15) / total * 100).toFixed(1)}%`],
+                ['Заменено с 0 на 1 (raw = 0)', coefReplacedFromZero, `${(coefReplacedFromZero / total * 100).toFixed(1)}%`],
                 ['Всего товаров', total, '100%']
             ];
 
