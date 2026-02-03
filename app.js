@@ -477,7 +477,7 @@ class CoefficientCalculator {
 
         if (this.results.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="13" class="text-center">Нет данных для отображения</td>`;
+            row.innerHTML = `<td colspan="7" class="text-center">Нет данных для отображения</td>`;
             table.appendChild(row);
             return;
         }
@@ -493,28 +493,24 @@ class CoefficientCalculator {
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
 
             const biasFormatted = (item.bias_percent ?? 0).toFixed(3);
+            const osaFormatted = (item.osa_percent ?? 0).toFixed(3);
+            const writeoffsFormatted = (item.writeoffs_percent ?? 0).toFixed(3);
 
             row.innerHTML = `
             <td>${item.product_id || ''}</td>
-            <td>${item.level1 || ''}</td>
-            <td>${item.level2 || ''}</td>
-            <td>${item.level3 || ''}</td>
-            <td>${item.level4 || ''}</td>
-            <td>${(item.sales_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.demand_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.prediction_final_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.swat_sum ?? 0).toLocaleString()}</td>
             <td class="col-diff ${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
-            <td>${biasFormatted}%</td>
             <td class="${rawCoefClass}">${(item.coefficient_raw ?? 0).toFixed(2)}</td>
             <td class="${adjCoefClass}">${(item.coefficient_adjusted ?? 0).toFixed(2)}</td>
+            <td>${biasFormatted}%</td>
+            <td>${osaFormatted}%</td>
+            <td>${writeoffsFormatted}%</td>
         `;
             table.appendChild(row);
         });
 
         if (this.results.length > 10) {
             const infoRow = document.createElement('tr');
-            infoRow.innerHTML = `<td colspan="13" class="text-center text-muted">
+            infoRow.innerHTML = `<td colspan="7" class="text-center text-muted">
             ... и ещё ${this.results.length - 10} строк. Скачайте Excel файл для просмотра всех данных.
         </td>`;
             table.appendChild(infoRow);
