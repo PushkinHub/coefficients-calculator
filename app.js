@@ -485,25 +485,17 @@ class CoefficientCalculator {
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
 
-            // Получаем классы для коэффициентов (передаем true для raw, false для adjusted)
-            const rawCoefClass = this.getCoefficientClass(item.coefficient_raw, true);
-            const adjCoefClass = this.getCoefficientClass(item.coefficient_adjusted, false);
-
             // Для Difference
             const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
 
-            const biasFormatted = (item.bias_percent ?? 0).toFixed(3);
-            const osaFormatted = (item.osa_percent ?? 0).toFixed(3);
-            const writeoffsFormatted = (item.writeoffs_percent ?? 0).toFixed(3);
-
             row.innerHTML = `
-            <td>${item.product_id || ''}</td>
+            <td>${item.level1 || ''}</td>
+            <td>${item.level4 || ''}</td>
+            <td>${(item.sales_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.demand_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.prediction_final_sum ?? 0).toLocaleString()}</td>
+            <td>${(item.swat_sum ?? 0).toLocaleString()}</td>
             <td class="col-diff ${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
-            <td class="${rawCoefClass}">${(item.coefficient_raw ?? 0).toFixed(2)}</td>
-            <td class="${adjCoefClass}">${(item.coefficient_adjusted ?? 0).toFixed(2)}</td>
-            <td>${biasFormatted}%</td>
-            <td>${osaFormatted}%</td>
-            <td>${writeoffsFormatted}%</td>
         `;
             table.appendChild(row);
         });
