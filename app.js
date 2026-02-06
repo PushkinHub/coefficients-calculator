@@ -170,14 +170,20 @@ class CoefficientCalculator {
     }
 
     isTextContent(text) {
-        if (text.length === 0) return false;
-        
-        // Проверяем что содержимое в основном текст (ASCII + некоторые символы)
-        const allowedChars = /[\x00-\x7F\r\n\t;,"' ]/g;
-        const cleanText = text.replace(allowedChars, '');
-        
-        // Допускаем не более 10% не-ASCII символов
-        return cleanText.length < text.length * 0.1;
+    if (typeof text !== 'string' || text.length === 0) {
+        return true; // Пустая строка - ок
+    }
+    
+    // Проверяем, что это в основном текст (не бинарные данные)
+    // Русские символы, английские, цифры, знаки препинания - все ок
+    const safeChars = /[\p{L}\p{N}\p{P}\p{Z}\p{S}\r\n\t;,"'=+\-@]/gu;
+    
+    // Считаем безопасные символы
+    const safeMatches = text.match(safeChars);
+    const safeCount = safeMatches ? safeMatches.length : 0;
+    
+    // Допускаем до 5% "небезопасных" символов (например, бинарные данные)
+    return safeCount >= text.length * 0.95;
     }
 
     containsDangerousContent(text) {
@@ -1122,3 +1128,4 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
+
