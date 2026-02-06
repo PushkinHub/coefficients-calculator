@@ -3,6 +3,12 @@ class CoefficientCalculator {
         this.demandFiles = [];
         this.swatFiles = [];
         this.results = null;
+        
+        // Константы безопасности
+        this.MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+        this.MAX_TOTAL_FILES = 20;
+        this.MAX_ROWS_PER_FILE = 50000;
+        this.MAX_TOTAL_ROWS = 500000;
 
         this.init();
     }
@@ -27,14 +33,14 @@ class CoefficientCalculator {
             demandUpload.classList.remove('drag-over');
         });
 
-        demandUpload.addEventListener('drop', (e) => {
+        demandUpload.addEventListener('drop', async (e) => {
             e.preventDefault();
             demandUpload.classList.remove('drag-over');
-            this.handleFiles(e.dataTransfer.files, 'demand');
+            await this.handleFiles(e.dataTransfer.files, 'demand');
         });
 
-        demandInput.addEventListener('change', (e) => {
-            this.handleFiles(e.target.files, 'demand');
+        demandInput.addEventListener('change', async (e) => {
+            await this.handleFiles(e.target.files, 'demand');
             e.target.value = '';
         });
 
@@ -52,14 +58,14 @@ class CoefficientCalculator {
             swatUpload.classList.remove('drag-over');
         });
 
-        swatUpload.addEventListener('drop', (e) => {
+        swatUpload.addEventListener('drop', async (e) => {
             e.preventDefault();
             swatUpload.classList.remove('drag-over');
-            this.handleFiles(e.dataTransfer.files, 'swat');
+            await this.handleFiles(e.dataTransfer.files, 'swat');
         });
 
-        swatInput.addEventListener('change', (e) => {
-            this.handleFiles(e.target.files, 'swat');
+        swatInput.addEventListener('change', async (e) => {
+            await this.handleFiles(e.target.files, 'swat');
             e.target.value = '';
         });
 
@@ -70,61 +76,236 @@ class CoefficientCalculator {
         document.getElementById('downloadBtn').addEventListener('click', () => this.downloadExcel());
     }
 
-    handleFiles(files, type) {
+    async handleFiles(files, type) {
         const validFiles = [];
+        const errors = [];
+
+        // Проверка общего количества файлов
+        const currentCount = type === 'demand' ? this.demandFiles.length : this.swatFiles.length;
+        if (currentCount + files.length > this.MAX_TOTAL_FILES) {
+            this.showAlert('warning', `Максимальное количество файлов: ${this.MAX_TOTAL_FILES}`);
+            return;
+        }
 
         for (let file of files) {
-            if (file.name.toLowerCase().endsWith('.csv')) {
+            try {
+                // 1. Проверка расширения
+                if (!this.isValidCSVExtension(file.name)) {
+                    errors.push(`"${this.sanitizeFileName(file.name)}" - не CSV файл`);
+                    continue;
+                }
+
+                // 2. Проверка размера
+                if (file.size > this.MAX_FILE_SIZE) {
+                    errors.push(`"${this.sanitizeFileName(file.name)}" - слишком большой (${this.formatFileSize(file.size)})`);
+                    continue;
+                }
+
+                // 3. Проверка содержимого файла
+                const isValid = await this.validateCSVContent(file);
+                if (!isValid) {
+                    errors.push(`"${this.sanitizeFileName(file.name)}" - неверный формат CSV`);
+                    continue;
+                }
+
                 validFiles.push(file);
-            } else {
-                this.showAlert('warning', `Файл ${file.name} не является CSV файлом и будет пропущен`);
+                
+            } catch (error) {
+                errors.push(`"${this.sanitizeFileName(file.name)}" - ошибка проверки: ${error.message}`);
             }
         }
 
-        if (type === 'demand') {
-            this.demandFiles.push(...validFiles);
-            this.renderFileList('demandFileList', this.demandFiles, 'demand');
-        } else {
-            this.swatFiles.push(...validFiles);
-            this.renderFileList('swatFileList', this.swatFiles, 'swat');
+        // Показать ошибки
+        if (errors.length > 0) {
+            const errorMsg = errors.slice(0, 3).join('<br>');
+            const moreMsg = errors.length > 3 ? `<br>...и еще ${errors.length - 3} ошибок` : '';
+            this.showAlert('warning', `Ошибки загрузки:<br>${errorMsg}${moreMsg}`);
         }
 
-        this.updateCalculateButton();
-        this.showAlert('success', `Добавлено ${validFiles.length} файлов ${type}`);
+        if (validFiles.length > 0) {
+            if (type === 'demand') {
+                this.demandFiles.push(...validFiles);
+                this.renderFileList('demandFileList', this.demandFiles, 'demand');
+            } else {
+                this.swatFiles.push(...validFiles);
+                this.renderFileList('swatFileList', this.swatFiles, 'swat');
+            }
+
+            this.updateCalculateButton();
+            this.showAlert('success', `Добавлено ${validFiles.length} файлов ${type}`);
+        }
+    }
+
+    isValidCSVExtension(filename) {
+        const name = filename.toLowerCase().trim();
+        return name.endsWith('.csv');
+    }
+
+    async validateCSVContent(file) {
+        try {
+            // Читаем только первые 5KB для проверки
+            const preview = await this.readFilePreview(file, 5 * 1024);
+            
+            // Проверяем что это текст, а не бинарный файл
+            if (!this.isTextContent(preview)) {
+                return false;
+            }
+
+            // Проверяем наличие разделителей
+            const hasDelimiters = preview.includes(';') || preview.includes(',');
+            if (!hasDelimiters) {
+                return false;
+            }
+
+            // Проверяем что нет опасного содержимого
+            if (this.containsDangerousContent(preview)) {
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('CSV validation error:', error);
+            return false;
+        }
+    }
+
+    isTextContent(text) {
+        if (text.length === 0) return false;
+        
+        // Проверяем что содержимое в основном текст (ASCII + некоторые символы)
+        const allowedChars = /[\x00-\x7F\r\n\t;,"' ]/g;
+        const cleanText = text.replace(allowedChars, '');
+        
+        // Допускаем не более 10% не-ASCII символов
+        return cleanText.length < text.length * 0.1;
+    }
+
+    containsDangerousContent(text) {
+        const dangerousPatterns = [
+            /<script/i,
+            /javascript:/i,
+            /onload=/i,
+            /onerror=/i,
+            /onclick=/i,
+            /eval\(/i,
+            /document\./i,
+            /window\./i,
+            /alert\(/i,
+            /fromCharCode/i,
+            /<!--/,
+            /-->/,
+            /<\/?[a-z][\s\S]*>/i  // HTML теги
+        ];
+
+        for (const pattern of dangerousPatterns) {
+            if (pattern.test(text)) {
+                console.warn('Обнаружено опасное содержимое:', pattern);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async readFilePreview(file, maxSize = 5 * 1024) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            const blob = file.slice(0, Math.min(maxSize, file.size));
+            
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Ошибка чтения файла'));
+            reader.onabort = () => reject(new Error('Чтение файла прервано'));
+            
+            reader.readAsText(blob, 'UTF-8');
+        });
     }
 
     renderFileList(containerId, files, type) {
         const container = document.getElementById(containerId);
-        container.innerHTML = '';
+        
+        // Безопасная очистка контейнера
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
 
         if (files.length === 0) {
-            container.innerHTML = '<div class="text-muted text-center">Нет загруженных файлов</div>';
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'text-muted text-center';
+            emptyDiv.textContent = 'Нет загруженных файлов';
+            container.appendChild(emptyDiv);
             return;
         }
 
         files.forEach((file, index) => {
-            const div = document.createElement('div');
-            div.className = 'file-item';
-            div.innerHTML = `
-                <div>
-                    <i class="bi bi-file-text file-icon"></i>
-                    <span>${file.name} (${this.formatFileSize(file.size)})</span>
-                </div>
-                <button class="file-remove" data-index="${index}" data-type="${type}">
-                    <i class="bi bi-x-lg"></i>
-                </button>
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.style.cssText = `
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.8rem 1rem;
+                background: white;
+                border-radius: 8px;
+                margin-bottom: 0.5rem;
+                border: 1px solid #dee2e6;
             `;
-            container.appendChild(div);
-        });
 
-        // Добавляем обработчики удаления
-        container.querySelectorAll('.file-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const index = parseInt(e.currentTarget.dataset.index);
-                const type = e.currentTarget.dataset.type;
+            const leftSection = document.createElement('div');
+            leftSection.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-file-text file-icon';
+            icon.style.color = '#3498db';
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = `${this.sanitizeFileName(file.name)} (${this.formatFileSize(file.size)})`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'file-remove';
+            removeBtn.style.cssText = `
+                background: none;
+                border: none;
+                color: #e74c3c;
+                cursor: pointer;
+                padding: 0 5px;
+                font-size: 1.2rem;
+            `;
+            removeBtn.setAttribute('data-index', index);
+            removeBtn.setAttribute('data-type', type);
+
+            const removeIcon = document.createElement('i');
+            removeIcon.className = 'bi bi-x-lg';
+
+            removeBtn.appendChild(removeIcon);
+            removeBtn.addEventListener('click', (e) => {
+                const index = parseInt(e.currentTarget.getAttribute('data-index'));
+                const type = e.currentTarget.getAttribute('data-type');
                 this.removeFile(index, type);
             });
+
+            leftSection.appendChild(icon);
+            leftSection.appendChild(textSpan);
+            fileItem.appendChild(leftSection);
+            fileItem.appendChild(removeBtn);
+            container.appendChild(fileItem);
         });
+    }
+
+    sanitizeFileName(filename) {
+        // Удаляем опасные символы, оставляем только безопасные
+        return String(filename)
+            .replace(/[<>:"/\\|?*]/g, '') // Удаляем опасные файловые символы
+            .substring(0, 100); // Ограничение длины
+    }
+
+    sanitizeText(text) {
+        // Безопасное отображение текста
+        return String(text)
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;')
+            .replace(/&/g, '&amp;')
+            .substring(0, 200); // Ограничение длины
     }
 
     removeFile(index, type) {
@@ -153,6 +334,12 @@ class CoefficientCalculator {
         this.showLoading(true);
 
         try {
+            // Ограничение общего количества строк
+            const totalRows = await this.estimateTotalRows();
+            if (totalRows > this.MAX_TOTAL_ROWS) {
+                throw new Error(`Слишком много данных. Максимум: ${this.MAX_TOTAL_ROWS.toLocaleString()} строк`);
+            }
+
             this.results = await this.processFiles();
             this.displayResults();
             this.showAlert('success', 'Расчет успешно завершен!');
@@ -162,6 +349,21 @@ class CoefficientCalculator {
         } finally {
             this.showLoading(false);
         }
+    }
+
+    async estimateTotalRows() {
+        let total = 0;
+        
+        // Оцениваем общее количество строк во всех файлах
+        for (const files of [this.demandFiles, this.swatFiles]) {
+            for (const file of files) {
+                const content = await this.readFilePreview(file, 100 * 1024);
+                const lines = content.split('\n').length - 1; // минус заголовок
+                total += Math.min(lines, this.MAX_ROWS_PER_FILE);
+            }
+        }
+        
+        return total;
     }
 
     async processFiles() {
@@ -198,14 +400,22 @@ class CoefficientCalculator {
 
     async processDemandFiles() {
         let allData = [];
+        let totalRows = 0;
 
         for (const file of this.demandFiles) {
             const content = await this.readFile(file);
-            const rows = this.parseCSV(content);
+            
+            // Ограничение количества строк и безопасный парсинг
+            const rows = this.parseCSVSafely(content, this.MAX_ROWS_PER_FILE);
+            totalRows += rows.length;
+            
+            if (totalRows > this.MAX_TOTAL_ROWS) {
+                throw new Error(`Превышен лимит строк в DEMAND файлах`);
+            }
 
             console.log(`Обработка DEMAND файла: ${file.name}, строк: ${rows.length}`);
 
-            // Колонка с числом — всегда последняя в CSV (как в ноутбуке)
+            // Колонка с числом — всегда последняя в CSV
             const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
             const valueCol = headers[headers.length - 1] || '';
 
@@ -213,7 +423,7 @@ class CoefficientCalculator {
                 const measureRaw = row['Measure Names'];
                 if (!measureRaw) continue;
 
-                const measure = String(measureRaw).trim().toLowerCase();
+                const measure = this.sanitizeText(String(measureRaw).trim().toLowerCase());
                 const rawVal = row[valueCol];
                 const value = this.parseNumber(rawVal !== undefined && rawVal !== '' ? rawVal : 0);
 
@@ -222,12 +432,14 @@ class CoefficientCalculator {
                     row['level 4'] || row['level4']
                 );
 
+                if (!productId) continue;
+
                 allData.push({
                     product_id: productId,
-                    level1: row['level 1'] || row['level1'] || '',
-                    level2: row['level 2'] || row['level2'] || '',
-                    level3: row['level 3'] || row['level3'] || '',
-                    level4: row['level 4'] || row['level4'] || '',
+                    level1: this.sanitizeText(row['level 1'] || row['level1'] || ''),
+                    level2: this.sanitizeText(row['level 2'] || row['level2'] || ''),
+                    level3: this.sanitizeText(row['level 3'] || row['level3'] || ''),
+                    level4: this.sanitizeText(row['level 4'] || row['level4'] || ''),
                     measure: measure,
                     value: value
                 });
@@ -289,16 +501,16 @@ class CoefficientCalculator {
                     aggregated[group.product_id].prediction_final = sum;
                     break;
                 case 'osa':
-                    aggregated[group.product_id].osa = sum / group.values.length; // среднее
+                    aggregated[group.product_id].osa = sum / Math.max(group.values.length, 1);
                     break;
                 case 'writeoffs_perc':
-                    aggregated[group.product_id].writeoffs = sum / group.values.length; // среднее
+                    aggregated[group.product_id].writeoffs = sum / Math.max(group.values.length, 1);
                     break;
                 case 'bias':
-                    aggregated[group.product_id].bias = sum / group.values.length; // среднее
+                    aggregated[group.product_id].bias = sum / Math.max(group.values.length, 1);
                     break;
                 case 'accuracy (final)':
-                    aggregated[group.product_id].accuracy = sum / group.values.length; // среднее
+                    aggregated[group.product_id].accuracy = sum / Math.max(group.values.length, 1);
                     break;
             }
         });
@@ -306,12 +518,53 @@ class CoefficientCalculator {
         return Object.values(aggregated);
     }
 
+    parseCSVSafely(content, maxRows) {
+        try {
+            const rows = this.parseCSV(content);
+            
+            // Ограничение количества строк
+            const limitedRows = rows.slice(0, maxRows);
+            
+            // Санитизация значений в каждой строке
+            return limitedRows.map(row => {
+                const sanitizedRow = {};
+                for (const [key, value] of Object.entries(row)) {
+                    // Защита от CSV инъекций
+                    let safeValue = String(value);
+                    const firstChar = safeValue.trim().charAt(0);
+                    
+                    if (['=', '+', '-', '@', '|', '\t', '\r'].includes(firstChar)) {
+                        safeValue = "'" + safeValue; // Экранирование
+                    }
+                    
+                    // Базовая санитизация
+                    safeValue = safeValue
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .substring(0, 1000); // Ограничение длины
+                    
+                    sanitizedRow[key] = safeValue;
+                }
+                return sanitizedRow;
+            });
+        } catch (error) {
+            console.error('CSV parsing error:', error);
+            throw new Error('Ошибка парсинга CSV файла');
+        }
+    }
+
     async processSwatFiles() {
         let allSwat = [];
+        let totalRows = 0;
 
         for (const file of this.swatFiles) {
             const content = await this.readFile(file);
-            const rows = this.parseCSV(content);
+            const rows = this.parseCSVSafely(content, this.MAX_ROWS_PER_FILE);
+            totalRows += rows.length;
+            
+            if (totalRows > this.MAX_TOTAL_ROWS) {
+                throw new Error(`Превышен лимит строк в SWAT файлах`);
+            }
 
             console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
 
@@ -330,12 +583,14 @@ class CoefficientCalculator {
                     row['level 4'] || row['level4']
                 );
 
+                if (!productId) continue;
+
                 allSwat.push({
                     product_id: productId,
-                    level1: row['level 1'] || row['level1'] || '',
-                    level2: row['level 2'] || row['level2'] || '',
-                    level3: row['level 3'] || row['level3'] || '',
-                    level4: row['level 4'] || row['level4'] || '',
+                    level1: this.sanitizeText(row['level 1'] || row['level1'] || ''),
+                    level2: this.sanitizeText(row['level 2'] || row['level2'] || ''),
+                    level3: this.sanitizeText(row['level 3'] || row['level3'] || ''),
+                    level4: this.sanitizeText(row['level 4'] || row['level4'] || ''),
                     value: value
                 });
             }
@@ -464,52 +719,75 @@ class CoefficientCalculator {
         const table = document.getElementById('resultTable');
         const statsGrid = document.getElementById('statsGrid');
 
+        // Очистка таблицы безопасным способом
+        while (table.firstChild) {
+            table.removeChild(table.firstChild);
+        }
+
         // Обновляем статистику
         this.updateStats(statsGrid);
 
-        // Заполняем таблицу (заголовки уже в <thead> в index.html)
-        table.innerHTML = '';
         const displayCount = Math.min(this.results.length, 10);
         const rowCountEl = document.getElementById('resultRowCount');
         if (rowCountEl) {
-            rowCountEl.textContent = this.results.length === 0 ? '' : `Всего строк: ${this.results.length}. Показаны первые ${displayCount}.`;
+            rowCountEl.textContent = this.results.length === 0 ? '' : 
+                `Всего строк: ${this.results.length}. Показаны первые ${displayCount}.`;
         }
 
         if (this.results.length === 0) {
             const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="7" class="text-center">Нет данных для отображения</td>`;
+            const cell = document.createElement('td');
+            cell.colSpan = 7;
+            cell.className = 'text-center';
+            cell.textContent = 'Нет данных для отображения';
+            row.appendChild(cell);
             table.appendChild(row);
+            container.style.display = 'block';
             return;
         }
 
+        // Заполняем таблицу безопасно
         this.results.slice(0, displayCount).forEach(item => {
             const row = document.createElement('tr');
 
-            // Для Difference
-            const diffClass = item.difference > 0 ? 'positive' : (item.difference < 0 ? 'negative' : 'neutral');
+            // Создаем ячейки с безопасным содержимым
+            [
+                this.sanitizeText(item.level1 || ''),
+                this.sanitizeText(item.level4 || ''),
+                (item.sales_sum ?? 0).toLocaleString(),
+                (item.demand_sum ?? 0).toLocaleString(),
+                (item.prediction_final_sum ?? 0).toLocaleString(),
+                (item.swat_sum ?? 0).toLocaleString()
+            ].forEach((content, index) => {
+                const cell = document.createElement('td');
+                cell.textContent = content;
+                row.appendChild(cell);
+            });
 
-            row.innerHTML = `
-            <td>${item.level1 || ''}</td>
-            <td>${item.level4 || ''}</td>
-            <td>${(item.sales_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.demand_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.prediction_final_sum ?? 0).toLocaleString()}</td>
-            <td>${(item.swat_sum ?? 0).toLocaleString()}</td>
-            <td class="col-diff ${diffClass}">${(item.difference ?? 0).toLocaleString()}</td>
-        `;
+            // Ячейка Difference с цветовым кодированием
+            const diffCell = document.createElement('td');
+            const diffValue = item.difference ?? 0;
+            diffCell.className = `col-diff ${diffValue > 0 ? 'positive' : (diffValue < 0 ? 'negative' : 'neutral')}`;
+            diffCell.textContent = diffValue.toLocaleString();
+            row.appendChild(diffCell);
+            
             table.appendChild(row);
         });
 
         if (this.results.length > 10) {
             const infoRow = document.createElement('tr');
-            infoRow.innerHTML = `<td colspan="7" class="text-center text-muted">
-            ... и ещё ${this.results.length - 10} строк. Скачайте Excel файл для просмотра всех данных.
-        </td>`;
+            const infoCell = document.createElement('td');
+            infoCell.colSpan = 7;
+            infoCell.className = 'text-center text-muted';
+            infoCell.textContent = `... и ещё ${this.results.length - 10} строк. Скачайте Excel файл для просмотра всех данных.`;
+            infoRow.appendChild(infoCell);
             table.appendChild(infoRow);
         }
 
         container.style.display = 'block';
-        container.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(() => {
+            container.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
     }
 
     updateStats(container) {
@@ -527,48 +805,47 @@ class CoefficientCalculator {
         const totalDifference = totalPrediction - totalDemand;
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + (r.bias_percent ?? 0), 0) / total : 0;
 
-        container.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-value">${total}</div>
-                <div class="stat-label">Всего товаров</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${coef1}</div>
-                <div class="stat-label">Коэф = 1.00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${coef08}</div>
-                <div class="stat-label">Коэф = 0.80</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${coef15}</div>
-                <div class="stat-label">Коэф = 1.50</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalSales.toLocaleString()}</div>
-                <div class="stat-label">Сумма Sales</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalDemand.toLocaleString()}</div>
-                <div class="stat-label">Сумма Demand</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalPrediction.toLocaleString()}</div>
-                <div class="stat-label">Сумма Prediction final</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalSwat.toLocaleString()}</div>
-                <div class="stat-label">Сумма SWAT</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${totalDifference.toLocaleString()}</div>
-                <div class="stat-label">Общая разница (Pred − Demand)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${avgBias.toFixed(2)}%</div>
-                <div class="stat-label">Средний Bias</div>
-            </div>
-        `;
+        // Безопасное создание статистики
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        const stats = [
+            { value: total, label: 'Всего товаров' },
+            { value: coef1, label: 'Коэф = 1.00' },
+            { value: coef08, label: 'Коэф = 0.80' },
+            { value: coef15, label: 'Коэф = 1.50' },
+            { value: totalSales.toLocaleString(), label: 'Сумма Sales' },
+            { value: totalDemand.toLocaleString(), label: 'Сумма Demand' },
+            { value: totalPrediction.toLocaleString(), label: 'Сумма Prediction final' },
+            { value: totalSwat.toLocaleString(), label: 'Сумма SWAT' },
+            { value: totalDifference.toLocaleString(), label: 'Общая разница (Pred − Demand)' },
+            { value: avgBias.toFixed(2) + '%', label: 'Средний Bias' }
+        ];
+
+        stats.forEach(stat => {
+            const card = document.createElement('div');
+            card.className = 'stat-card';
+            card.style.cssText = `
+                background: #f8f9fa;
+                padding: 1.5rem;
+                border-radius: 10px;
+                text-align: center;
+                border-top: 4px solid #3498db;
+            `;
+
+            const valueDiv = document.createElement('div');
+            valueDiv.className = 'stat-value';
+            valueDiv.textContent = stat.value;
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'stat-label';
+            labelDiv.textContent = stat.label;
+
+            card.appendChild(valueDiv);
+            card.appendChild(labelDiv);
+            container.appendChild(card);
+        });
     }
 
     async downloadExcel() {
@@ -580,7 +857,6 @@ class CoefficientCalculator {
         this.showLoading(true);
 
         try {
-            // Порядок колонок: Sales, Demand, Prediction Final, SWAT, Difference, Коэф (raw), Коэф (adjusted), Bias %, OSA %, Writeoffs %
             const mainData = this.results.map(item => ({
                 'Product ID': item.product_id,
                 'Level 1': item.level1,
@@ -599,7 +875,6 @@ class CoefficientCalculator {
                 'Writeoffs %': (item.writeoffs_percent || 0) / 100
             }));
 
-            // Лист со статистикой
             const total = this.results.length;
             const coef1 = this.results.filter(r => r.coefficient_adjusted === 1.00).length;
             const coef08 = this.results.filter(r => r.coefficient_adjusted === 0.80).length;
@@ -616,16 +891,13 @@ class CoefficientCalculator {
                 ['Всего товаров', total, '100%']
             ];
 
-            // Создаем рабочую книгу
             const wb = XLSX.utils.book_new();
-
-            // Основной лист
             const ws1 = XLSX.utils.json_to_sheet(mainData);
-
-            // Формат процентов: 1 знак после запятой (Bias %, OSA %, Writeoffs %)
+            
+            // Формат процентов
             const range = XLSX.utils.decode_range(ws1['!ref']);
-
             const percentColumns = {};
+            
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
                 const cell = ws1[cellAddress];
@@ -649,53 +921,39 @@ class CoefficientCalculator {
 
             XLSX.utils.book_append_sheet(wb, ws1, 'Коэффициенты и метрики');
 
-            // Лист со статистикой
             const ws2 = XLSX.utils.aoa_to_sheet(statsData);
             XLSX.utils.book_append_sheet(wb, ws2, 'Статистика');
 
-            // Лист с информацией
             const infoData = [
                 ['Параметр', 'Значение'],
                 ['Дата создания отчета', new Date().toLocaleString('ru-RU')],
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Difference, Bias %, OSA %, Writeoffs %'],
-                ['Порядок колонок', 'Sales, Demand, Prediction Final, SWAT, Difference, Коэф (raw), Коэф (adjusted), Bias %, OSA %, Writeoffs %'],
-                ['Формат процентов', 'Bias %, OSA %, Writeoffs % — 1 знак после запятой'],
-                ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
-                ['Формула Difference', 'prediction_final - demand'],
-                ['Формула коэффициента', 'demand / swat'],
+                ['Безопасность', 'Все вычисления выполнены локально в вашем браузере'],
                 ['Количество файлов DEMAND', this.demandFiles.length],
                 ['Количество файлов SWAT', this.swatFiles.length]
             ];
             const ws3 = XLSX.utils.aoa_to_sheet(infoData);
             XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
 
-            // Настраиваем ширину колонок (порядок как в mainData)
+            // Ширина колонок
             const colWidths = [
-                { wch: 20 }, // Product ID
-                { wch: 15 }, // Level 1
-                { wch: 25 }, // Level 2
-                { wch: 40 }, // Level 3
-                { wch: 12 }, // Level 4
-                { wch: 10 }, // Sales
-                { wch: 10 }, // Demand
-                { wch: 15 }, // Prediction Final
-                { wch: 10 }, // SWAT
-                { wch: 12 }, // Difference
-                { wch: 15 }, // Коэффициент (raw)
-                { wch: 15 }, // Коэффициент (adjusted)
-                { wch: 10 }, // Bias %
-                { wch: 10 }, // OSA %
-                { wch: 12 }  // Writeoffs %
+                { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 40 }, { wch: 12 },
+                { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 },
+                { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 12 }
             ];
             ws1['!cols'] = colWidths;
 
-            // Уникальное имя файла: дата и время до секунд
             const now = new Date();
-            const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + '-' + String(now.getMinutes()).padStart(2, '0') + '-' + String(now.getSeconds()).padStart(2, '0');
+            const ts = now.getFullYear() + '-' + 
+                      String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(now.getDate()).padStart(2, '0') + '_' + 
+                      String(now.getHours()).padStart(2, '0') + '-' + 
+                      String(now.getMinutes()).padStart(2, '0') + '-' + 
+                      String(now.getSeconds()).padStart(2, '0');
             const filename = `coefficients_report_${ts}.xlsx`;
+            
             XLSX.writeFile(wb, filename);
-
             this.showAlert('success', `Файл "${filename}" успешно скачан!`);
         } catch (error) {
             console.error('Excel export error:', error);
@@ -714,7 +972,8 @@ class CoefficientCalculator {
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
                 resolve(text);
             };
-            reader.onerror = (e) => reject(new Error('Ошибка чтения файла'));
+            reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+            reader.onabort = () => reject(new Error('Чтение файла прервано'));
             reader.readAsText(file, 'UTF-8');
         });
     }
@@ -763,12 +1022,10 @@ class CoefficientCalculator {
                 result.push(obj);
             }
 
-            console.log(`Парсинг CSV: заголовки: ${headers}, строк: ${result.length}`);
-
             return result;
         } catch (error) {
             console.error('CSV parsing error:', error);
-            return [];
+            throw new Error('Ошибка парсинга CSV файла');
         }
     }
 
@@ -791,12 +1048,11 @@ class CoefficientCalculator {
         return isNaN(num) ? 0 : num;
     }
 
-    // Как в ноутбуке: product_id = level1 (без пробелов) + level4, без даты — одна строка на товар, суммы по датам
     createProductId(level1, level4) {
         if (!level1 || !level4) return '';
 
-        const l1 = String(level1).trim().replace(/\s+/g, '');
-        const l4 = String(level4).trim().replace(/\.0$/, '').replace(/"/g, '');
+        const l1 = String(level1).trim().replace(/\s+/g, '').substring(0, 50);
+        const l4 = String(level4).trim().replace(/\.0$/, '').replace(/"/g, '').substring(0, 50);
 
         return l1 + l4;
     }
@@ -807,31 +1063,6 @@ class CoefficientCalculator {
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    getCoefficientClass(coef, isRaw = false) {
-        // Проверка на ноль или очень маленькие значения
-        if (coef === 0 || coef <= 0.8) {
-            return 'coef-08'; // желтый
-        }
-
-        // Проверка на большие значения
-        if (coef >= 1.5) {
-            return 'coef-15'; // красный
-        }
-
-        // Только для raw коэффициента: диапазон 0.96-1.04
-        if (isRaw && coef >= 0.96 && coef <= 1.04) {
-            return 'coef-1'; // зеленый
-        }
-
-        // Для adjusted коэффициента: если точно 1.00 (после замены)
-        if (!isRaw && coef === 1.00) {
-            return 'coef-1'; // зеленый
-        }
-
-        // Для всего остального - пустая строка (обычный черный шрифт)
-        return '';
     }
 
     showLoading(show) {
@@ -849,16 +1080,34 @@ class CoefficientCalculator {
 
     showAlert(type, message) {
         const container = document.getElementById('alertContainer');
-
-        container.innerHTML = '';
+        
+        // Удаляем старые алерты
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
 
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-message alert-dismissible fade show`;
-        alert.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        alert.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
         `;
-
+        
+        const messageSpan = document.createElement('span');
+        messageSpan.innerHTML = message;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        
+        alert.appendChild(messageSpan);
+        alert.appendChild(closeBtn);
         container.appendChild(alert);
 
         setTimeout(() => {
@@ -873,4 +1122,3 @@ class CoefficientCalculator {
 document.addEventListener('DOMContentLoaded', () => {
     window.calculator = new CoefficientCalculator();
 });
-
