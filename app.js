@@ -909,18 +909,18 @@ class CoefficientCalculator {
                 'level2': item.level2,
                 'level3': item.level3,
                 'level4': item.level4,
-                // Порядок колонок как в ноутбуке / скриншоте
-                'coefficient_raw': item.coefficient_raw,
-                'coefficient_adjusted': item.coefficient_adjusted,
-                'sales_sum': item.sales_sum ?? 0,
-                'demand_sum': item.demand_sum,
-                'swat_sum': item.swat_sum,
-                'prediction_final_sum': item.prediction_final_sum,
-                'uplift_factor, %': item.uplift_factor_percent || 0,
+                // Порядок и названия колонок как в ноутбуке / скриншоте
+                'Коэффициент (raw)': item.coefficient_raw,
+                'Коэффициент (adjusted)': item.coefficient_adjusted,
+                'Sales': item.sales_sum ?? 0,
+                'Demand': item.demand_sum,
+                'SWAT': item.swat_sum,
+                'Prediction Final': item.prediction_final_sum,
                 'Difference': item.difference,
                 'Bias %': item.bias_percent || 0,
                 'OSA %': item.osa_percent || 0,
-                'Writeoffs %': item.writeoffs_percent || 0
+                'Writeoffs %': item.writeoffs_percent || 0,
+                'uplift_factor, %': item.uplift_factor_percent || 0
             }));
 
             const total = this.results.length;
