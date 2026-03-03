@@ -37,8 +37,9 @@ https://pushkinhub.github.io/coefficients-calculator/
 Пример выгрузки `Demand`:  
 https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=378c16e21413
 
-Пример выгрузки `SWAT`:  
+Пример выгрузки `Prediction Final`:  
 https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=6a6580c71353
+
 
 
 
