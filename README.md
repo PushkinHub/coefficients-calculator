@@ -18,7 +18,7 @@ https://pushkinhub.github.io/coefficients-calculator/
 
 ## Правила расчёта коэффициентов
 
-- **`Коэффициент (raw)`** – отношение суммы `Demand` за выбранный период к сумме `SWAT` за тот же период.
+- **`Коэффициент (raw)`** – отношение суммы `Demand` за выбранный период к сумме `Prediction Final` за тот же период.
 - **`Коэффициент (adjusted)`** – скорректированное значение коэффициента по правилам:
   - если получилось `0` или ошибка → берём `1.00`;
   - если значение в диапазоне от `0.96` до `1.04` → приводим к `1.00`;
@@ -39,5 +39,6 @@ https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&stat
 
 Пример выгрузки `SWAT`:  
 https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=6a6580c71353
+
 
 
