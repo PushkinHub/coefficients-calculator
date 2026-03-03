@@ -1,7 +1,7 @@
-Калькулятор коэффициентов Demand/SWAT
+Калькулятор коэффициентов Demand/Prediction Final
 ======================================
 
-Веб‑приложение для автоматического расчёта корректировочных коэффициентов между историческими данными `DEMAND` и прогнозами `SWAT`.  
+Веб‑приложение для автоматического расчёта корректировочных коэффициентов между историческими данными `DEMAND` и прогнозами `Prediction Final`.  
 Приложение работает как **калькулятор в браузере**: вы загружаете файлы, получаете результат и можете скачать отчёт.
 
 Сайт доступен по ссылке:  
@@ -18,8 +18,8 @@ https://pushkinhub.github.io/coefficients-calculator/
 
 ## Правила расчёта коэффициентов
 
-- **`coefficient_raw`** – отношение суммы `Demand` за выбранный период к сумме `SWAT` за тот же период.
-- **`coefficient_adjusted`** – скорректированное значение коэффициента по правилам:
+- **`Коэффициент (raw)`** – отношение суммы `Demand` за выбранный период к сумме `SWAT` за тот же период.
+- **`Коэффициент (adjusted)`** – скорректированное значение коэффициента по правилам:
   - если получилось `0` или ошибка → берём `1.00`;
   - если значение в диапазоне от `0.96` до `1.04` → приводим к `1.00`;
   - если значение меньше `0.8` → устанавливаем `0.80`;
@@ -27,7 +27,7 @@ https://pushkinhub.github.io/coefficients-calculator/
 
 ## Формулы метрик
 
-Рассчитанные метрики: `Coefficient`, `Difference`, `Bias %`, `OSA %`, `Writeoffs %`.
+Рассчитанные метрики: `Coefficient`, `Difference`, `Bias %`, `OSA %`, `Writeoffs %`, `uplift_factor, %`.
 
 - **Bias %**: (prediction_final - demand) / demand * 100
 - **Difference**: prediction_final - demand
@@ -39,4 +39,5 @@ https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&stat
 
 Пример выгрузки `SWAT`:  
 https://datalens.yandex-team.ru/3lf9drlr6acqt-demand-prediction-2-0?tab=jKa&state=6a6580c71353
+
 
