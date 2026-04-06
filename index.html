@@ -498,16 +498,16 @@
                     <div class="rule-item">
                         <div class="rule-number">1</div>
                         <div>
-                            <h5>Значения с 0</h5>
-                            <p>Значения, равные 0, заменяются на 1</p>
+                            <h5>Округление raw</h5>
+                            <p>Сначала коэффициент округляется до 2 знаков после запятой</p>
                         </div>
                     </div>
 
                     <div class="rule-item">
                         <div class="rule-number">2</div>
                         <div>
-                            <h5>Диапазон 0.96-1.04</h5>
-                            <p>Значения от 0.96 до 1.04 заменяются на 1.00</p>
+                            <h5>Диапазон 0.96–1.04</h5>
+                            <p>Значения от 0.96 до 1.04 (включительно) заменяются на 1.00</p>
                         </div>
                     </div>
                 </div>
@@ -526,6 +526,13 @@
                         <div>
                             <h5>Максимум 1.5</h5>
                             <p>Значения &gt; 1.5 заменяются на 1.50</p>
+                        </div>
+                    </div>
+                    <div class="rule-item">
+                        <div class="rule-number">*</div>
+                        <div>
+                            <h5>Некорректный raw</h5>
+                            <p>Если raw = 0, NaN или не число, adjusted = 1.00</p>
                         </div>
                     </div>
                 </div>
@@ -631,7 +638,9 @@
                             <th>Demand</th>
                             <th>Prediction Final</th>
                             <th>SWAT</th>
-                            <th class="col-diff">Diff</th>
+                            <th>Bias %</th>
+                            <th>OSA %</th>
+                            <th class="col-diff">Difference</th>
                         </tr>
                     </thead>
                     <tbody id="resultTable"></tbody>
@@ -653,9 +662,14 @@
 
         <div id="alertContainer"></div>
 
+        <div id="calcSuccessPopup" class="calc-success-popup" role="img" aria-hidden="true" hidden>
+            <button type="button" class="calc-success-popup__close" aria-label="Закрыть" title="Закрыть">&times;</button>
+            <img alt="" class="calc-success-popup__img" data-success-image="7d65e5a32cc186ba9a4956f7ebf91899.jpg" loading="lazy" decoding="async">
+        </div>
+
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-        <script src="app.js?v=4"></script>
+        <script src="app.js?v=8"></script>
 </body>
 
 </html>
