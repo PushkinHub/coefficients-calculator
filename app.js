@@ -9,13 +9,114 @@ class CoefficientCalculator {
         this.MAX_TOTAL_FILES = 20;
         this.MAX_ROWS_PER_FILE = 50000;
         this.MAX_TOTAL_ROWS = 500000;
+        this._calcSuccessPopupTimer = null;
 
         this.init();
     }
 
     init() {
         this.bindEvents();
+        this.bindSuccessPopup();
         this.updateCalculateButton();
+    }
+
+    bindSuccessPopup() {
+        const popup = document.getElementById('calcSuccessPopup');
+        const closeBtn = popup && popup.querySelector('.calc-success-popup__close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.hideCalcSuccessPopup());
+        }
+        this.setSuccessPopupImageSrc();
+    }
+
+    /**
+     * URL картинки относительно app.js (GitHub Pages: user.github.io/repo/).
+     * Запасной вариант — та же папка, что и у текущей страницы.
+     */
+    setSuccessPopupImageSrc() {
+        const img = document.querySelector('#calcSuccessPopup .calc-success-popup__img');
+        if (!img || img.dataset.srcReady === '1') return;
+
+        const filename = img.getAttribute('data-success-image') || '7d65e5a32cc186ba9a4956f7ebf91899.jpg';
+        const rawBases = [];
+
+        const scriptEl = document.querySelector('script[src*="app.js"]');
+        if (scriptEl && scriptEl.src) {
+            try {
+                rawBases.push(new URL('.', scriptEl.src).href);
+            } catch (e) { /* ignore */ }
+        }
+        try {
+            rawBases.push(new URL('.', window.location.href).href);
+        } catch (e) { /* ignore */ }
+
+        const bases = [...new Set(rawBases)];
+        const fileVariants = [filename, `assets/${filename}`];
+        const candidates = [];
+        for (const base of bases) {
+            for (const f of fileVariants) {
+                try {
+                    candidates.push(new URL(f, base).href);
+                } catch (e) { /* ignore */ }
+            }
+        }
+        const uniqueCandidates = [...new Set(candidates)];
+
+        let attempt = 0;
+        const tryLoad = () => {
+            if (attempt >= uniqueCandidates.length) {
+                console.warn('Success popup image not found. Add file next to app.js:', filename);
+                return;
+            }
+            const url = uniqueCandidates[attempt];
+            attempt += 1;
+            const probe = new Image();
+            probe.onload = () => {
+                img.src = url;
+                img.dataset.srcReady = '1';
+            };
+            probe.onerror = () => tryLoad();
+            probe.src = url;
+        };
+        tryLoad();
+    }
+
+    showCalcSuccessPopup() {
+        const popup = document.getElementById('calcSuccessPopup');
+        if (!popup) return;
+
+        if (this._calcSuccessPopupTimer) {
+            clearTimeout(this._calcSuccessPopupTimer);
+            this._calcSuccessPopupTimer = null;
+        }
+
+        popup.removeAttribute('hidden');
+        popup.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => {
+            popup.classList.add('calc-success-popup--visible');
+        });
+
+        this._calcSuccessPopupTimer = setTimeout(() => {
+            this.hideCalcSuccessPopup();
+        }, 4500);
+    }
+
+    hideCalcSuccessPopup() {
+        const popup = document.getElementById('calcSuccessPopup');
+        if (!popup) return;
+
+        if (this._calcSuccessPopupTimer) {
+            clearTimeout(this._calcSuccessPopupTimer);
+            this._calcSuccessPopupTimer = null;
+        }
+
+        popup.classList.remove('calc-success-popup--visible');
+        popup.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+            if (!popup.classList.contains('calc-success-popup--visible')) {
+                popup.setAttribute('hidden', '');
+            }
+        }, 450);
     }
 
     bindEvents() {
@@ -333,7 +434,7 @@ class CoefficientCalculator {
 
     async calculate() {
         if (this.demandFiles.length === 0 || this.swatFiles.length === 0) {
-            this.showAlert('danger', 'Загрузите файлы DEMAND и SWAT');
+            this.showAlert('danger', 'Загрузите файлы DEMAND и Prediction Final');
             return;
         }
 
@@ -349,6 +450,7 @@ class CoefficientCalculator {
             this.results = await this.processFiles();
             this.displayResults();
             this.showAlert('success', 'Расчет успешно завершен!');
+            this.showCalcSuccessPopup();
         } catch (error) {
             console.error('Calculation error:', error);
             this.showAlert('danger', `Ошибка расчета: ${error.message}`);
@@ -384,20 +486,17 @@ class CoefficientCalculator {
         progressText.textContent = '25%';
         const demandData = await this.processDemandFiles();
 
-        // Шаг 2: Загрузка и обработка SWAT файлов
+        // Шаг 2: Загрузка и обработка файлов Prediction Final (SWAT + prediction_final)
         progressFill.style.width = '50%';
         progressText.textContent = '50%';
         const swatData = await this.processSwatFiles();
 
-        // Шаг 3: Расчет метрик
-        progressFill.style.width = '75%';
-        progressText.textContent = '75%';
-        const demandMetrics = this.calculateMetrics(demandData);
-
-        // Шаг 4: Расчет коэффициентов
+        // Шаг 3–4: Метрики (Difference, Bias) и коэффициенты
+        progressFill.style.width = '90%';
+        progressText.textContent = '90%';
+        const results = this.calculateCoefficients(swatData, demandData);
         progressFill.style.width = '100%';
         progressText.textContent = '100%';
-        const results = this.calculateCoefficients(swatData, demandMetrics);
 
         progressContainer.style.display = 'none';
 
@@ -425,11 +524,12 @@ class CoefficientCalculator {
             const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
             const valueCol = headers[headers.length - 1] || '';
 
-            for (const row of rows) {
-                const measureRaw = row['Measure Names'];
-                if (!measureRaw) continue;
+            const measureKey = this.findMeasureColumnKey(rows[0] || {});
 
-                const measure = this.sanitizeText(String(measureRaw).trim().toLowerCase());
+            for (const row of rows) {
+                const measureRaw = measureKey ? row[measureKey] : row['Measure Names'];
+                if (measureRaw === undefined || measureRaw === null || String(measureRaw).trim() === '') continue;
+
                 const rawVal = row[valueCol];
                 const value = this.parseNumber(rawVal !== undefined && rawVal !== '' ? rawVal : 0);
 
@@ -440,13 +540,15 @@ class CoefficientCalculator {
 
                 if (!productId) continue;
 
+                const measureNorm = this.normalizeMeasureToken(measureRaw);
+
                 allData.push({
                     product_id: productId,
                     level1: this.sanitizeText(row['level 1'] || row['level1'] || ''),
                     level2: this.sanitizeText(row['level 2'] || row['level2'] || ''),
                     level3: this.sanitizeText(row['level 3'] || row['level3'] || ''),
                     level4: this.sanitizeText(row['level 4'] || row['level4'] || ''),
-                    measure: measure,
+                    measure: measureNorm,
                     value: value
                 });
             }
@@ -485,7 +587,7 @@ class CoefficientCalculator {
                     level4: group.level4,
                     demand: 0,
                     sales: 0,
-                    prediction_final: 0,
+                    prediction_final_demand: 0,
                     osa: 0,
                     writeoffs: 0,
                     bias: 0,
@@ -494,7 +596,7 @@ class CoefficientCalculator {
             }
 
             const sum = group.values.reduce((a, b) => a + b, 0);
-            const measureNorm = (group.measure || '').toString().trim().toLowerCase();
+            const measureNorm = (group.measure || '').toString();
 
             switch (measureNorm) {
                 case 'demand':
@@ -503,19 +605,19 @@ class CoefficientCalculator {
                 case 'sales':
                     aggregated[group.product_id].sales = sum;
                     break;
-                case 'prediction_final':
-                    aggregated[group.product_id].prediction_final = sum;
+                case 'predictionfinal':
+                    aggregated[group.product_id].prediction_final_demand = sum;
                     break;
                 case 'osa':
                     aggregated[group.product_id].osa = sum / Math.max(group.values.length, 1);
                     break;
-                case 'writeoffs_perc':
+                case 'writeoffsperc':
                     aggregated[group.product_id].writeoffs = sum / Math.max(group.values.length, 1);
                     break;
                 case 'bias':
                     aggregated[group.product_id].bias = sum / Math.max(group.values.length, 1);
                     break;
-                case 'accuracy (final)':
+                case 'accuracyfinal':
                     aggregated[group.product_id].accuracy = sum / Math.max(group.values.length, 1);
                     break;
             }
@@ -570,16 +672,23 @@ class CoefficientCalculator {
             totalRows += rows.length;
             
             if (totalRows > this.MAX_TOTAL_ROWS) {
-                throw new Error(`Превышен лимит строк в SWAT файлах`);
+                throw new Error(`Превышен лимит строк в файлах Prediction Final`);
             }
 
-            console.log(`Обработка SWAT файла: ${file.name}, строк: ${rows.length}`);
+            console.log(`Обработка Prediction Final файла: ${file.name}, строк: ${rows.length}`);
 
             const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
             const valueCol = headers[headers.length - 1] || '';
+            const measureKey = this.findMeasureColumnKey(rows[0] || {});
+
+            const fileSwatPrimary = [];
+            const fileSwatFallback = [];
+            const fileFinalPrimary = [];
+            const fileFinalFallback = [];
 
             for (const row of rows) {
-                const measure = (row['Measure Names'] || '').toString().trim().toLowerCase();
+                const measureRaw = measureKey ? row[measureKey] : row['Measure Names'];
+                const measureToken = this.normalizeMeasureToken(measureRaw);
                 const rawVal = row[valueCol];
                 const value = this.parseNumber(rawVal !== undefined && rawVal !== '' ? rawVal : 0);
 
@@ -590,22 +699,30 @@ class CoefficientCalculator {
 
                 if (!productId) continue;
 
-                if (measure === 'prediction_swat') {
-                    allSwat.push({
-                        product_id: productId,
-                        level1: this.sanitizeText(row['level 1'] || row['level1'] || ''),
-                        level2: this.sanitizeText(row['level 2'] || row['level2'] || ''),
-                        level3: this.sanitizeText(row['level 3'] || row['level3'] || ''),
-                        level4: this.sanitizeText(row['level 4'] || row['level4'] || ''),
-                        value: value
-                    });
-                } else if (measure === 'prediction_final') {
-                    allPredictionFinalSwat.push({
-                        product_id: productId,
-                        value: value
-                    });
+                const base = {
+                    product_id: productId,
+                    level1: this.sanitizeText(row['level 1'] || row['level1'] || ''),
+                    level2: this.sanitizeText(row['level 2'] || row['level2'] || ''),
+                    level3: this.sanitizeText(row['level 3'] || row['level3'] || ''),
+                    level4: this.sanitizeText(row['level 4'] || row['level4'] || ''),
+                    value
+                };
+
+                if (measureToken === 'predictionswat') {
+                    fileSwatPrimary.push(base);
+                } else if (measureToken === 'swatschedule') {
+                    fileSwatFallback.push(base);
+                } else if (measureToken === 'predictionfinal') {
+                    fileFinalPrimary.push({ product_id: productId, value });
+                } else if (measureToken === 'finalschedule') {
+                    fileFinalFallback.push({ product_id: productId, value });
                 }
             }
+
+            const swatChosen = fileSwatPrimary.length > 0 ? fileSwatPrimary : fileSwatFallback;
+            const finalChosen = fileFinalPrimary.length > 0 ? fileFinalPrimary : fileFinalFallback;
+            allSwat.push(...swatChosen);
+            allPredictionFinalSwat.push(...finalChosen);
         }
 
         console.log(`SWAT записи: ${allSwat.length}`);
@@ -661,93 +778,105 @@ class CoefficientCalculator {
         return swatAggregated;
     }
 
-    calculateMetrics(demandData) {
+    calculateCoefficients(swatData, demandData) {
         const results = [];
-
-        demandData.forEach(item => {
-            const demandRounded = Math.round(item.demand);
-            const salesRounded = Math.round(item.sales);
-            const predictionRounded = Math.round(item.prediction_final);
-
-            // Difference
-            const difference = predictionRounded - demandRounded;
-
-            // Bias %
-            const bias = demandRounded !== 0 ? (difference / demandRounded) : 0;
-            const biasPercent = Math.round(bias * 100000) / 1000;
-
-            results.push({
+        const demandMetrics = demandData.map(item => {
+            const demandSum = item.demand || 0;
+            const salesSum = item.sales || 0;
+            const predFinalDemand = item.prediction_final_demand || 0;
+            const difference = Math.round(predFinalDemand - demandSum);
+            const biasRaw = demandSum !== 0 ? ((predFinalDemand - demandSum) / demandSum) * 100 : 0;
+            const biasPercent = Math.round(biasRaw * 10) / 10;
+            return {
                 product_id: item.product_id,
                 level1: item.level1,
                 level2: item.level2,
                 level3: item.level3,
                 level4: item.level4,
-                sales_sum: salesRounded,
-                demand_sum: demandRounded,
-                prediction_final_sum: predictionRounded,
-                difference: difference,
+                sales_sum: salesSum,
+                demand_sum: demandSum,
+                prediction_final_sum_demand: predFinalDemand,
+                difference,
                 bias_percent: biasPercent,
-                osa_percent: Math.round(item.osa * 100000) / 1000,
-                writeoffs_percent: Math.round(item.writeoffs * 100000) / 1000,
-                accuracy_final: Math.round(item.accuracy * 100000) / 1000
-            });
+                osa_percent: Math.round((item.osa || 0) * 1000) / 10,
+                writeoffs_percent: Math.round((item.writeoffs || 0) * 1000) / 10,
+                accuracy_final: Math.round((item.accuracy || 0) * 1000) / 10
+            };
         });
 
-        console.log(`Рассчитано метрик: ${results.length}`);
+        const demandById = new Map(demandMetrics.map(m => [m.product_id, m]));
+        const allIds = new Set([
+            ...demandMetrics.map(m => m.product_id),
+            ...Object.keys(swatData)
+        ]);
 
-        return results;
-    }
-
-    calculateCoefficients(swatData, demandMetrics) {
-        const results = [];
-
-        for (const metric of demandMetrics) {
-            const swatItem = swatData[metric.product_id];
+        for (const productId of allIds) {
+            const metric = demandById.get(productId);
+            const swatItem = swatData[productId];
             const swatValue = swatItem ? swatItem.swat_sum : 0;
-            const demandValue = metric.demand_sum || 0;
-            // prediction_final для коэффициента берем только из SWAT,
-            // значения prediction_final из DEMAND для коэффициента не используем
-            let predictionValue = 0;
+            const demandValue = metric ? (metric.demand_sum || 0) : 0;
+            const salesSum = metric ? (metric.sales_sum || 0) : 0;
+            const predFinalDemand = metric ? (metric.prediction_final_sum_demand || 0) : 0;
+
+            // prediction_final для коэффициента и колонки «Prediction Final» — из файлов Prediction Final
+            let predictionFromFile = 0;
             if (swatItem && swatItem.prediction_final_sum_swat != null) {
-                predictionValue = swatItem.prediction_final_sum_swat;
+                predictionFromFile = swatItem.prediction_final_sum_swat;
             }
 
-            // Исходный коэффициент: demand / prediction_final
+            // Коэффициент: demand / prediction_final (из папки Prediction Final)
             let exactCoefficient = 0;
-            if (predictionValue !== 0 && demandValue !== 0) {
-                exactCoefficient = demandValue / predictionValue;
+            if (predictionFromFile !== 0) {
+                exactCoefficient = demandValue / predictionFromFile;
             }
 
-            // Округление до 2 знаков
             const rawCoefficient = Math.round(exactCoefficient * 100) / 100;
 
-            // Применение правил корректировки
             let adjustedCoefficient = rawCoefficient;
+            if (rawCoefficient === 0 || isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
+                adjustedCoefficient = 1.0;
+            } else if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
+                adjustedCoefficient = 1.0;
+            } else if (rawCoefficient < 0.8) {
+                adjustedCoefficient = 0.8;
+            } else if (rawCoefficient > 1.5) {
+                adjustedCoefficient = 1.5;
+            }
 
-            // Uplift factor = (prediction_final / swat_sum - 1) * 100%
             let upliftFactorPercent = 0;
             if (swatValue !== 0) {
-                upliftFactorPercent = (predictionValue / swatValue - 1) * 100;
+                upliftFactorPercent = (predictionFromFile / swatValue - 1) * 100;
                 upliftFactorPercent = Math.round(upliftFactorPercent * 10) / 10;
             }
 
-            if (rawCoefficient === 0) {
-                adjustedCoefficient = 1;
-            } else if (isNaN(rawCoefficient) || !isFinite(rawCoefficient)) {
-                adjustedCoefficient = 0.8;
-            } else if (rawCoefficient >= 0.96 && rawCoefficient <= 1.04) {
-                adjustedCoefficient = 1.00;
-            } else if (rawCoefficient < 0.8) {
-                adjustedCoefficient = 0.80;
-            } else if (rawCoefficient > 1.5) {
-                adjustedCoefficient = 1.50;
-            }
+            const level1 = metric ? metric.level1 : (swatItem ? swatItem.level1 : '');
+            const level2 = metric ? metric.level2 : (swatItem ? swatItem.level2 : '');
+            const level3 = metric ? metric.level3 : (swatItem ? swatItem.level3 : '');
+            const level4 = metric ? metric.level4 : (swatItem ? swatItem.level4 : '');
+
+            const difference = Math.round(predFinalDemand - demandValue);
+            const biasRaw = demandValue !== 0 ? ((predFinalDemand - demandValue) / demandValue) * 100 : 0;
+            const biasPercent = Math.round(biasRaw * 10) / 10;
+
+            const swatRounded = Math.round(swatValue);
+            const predictionFinalRounded = Math.round(predictionFromFile);
 
             results.push({
-                ...metric,
-                // prediction_final_sum в итогах берем после подмены значением из SWAT (если оно есть)
-                prediction_final_sum: Math.round(predictionValue),
-                swat_sum: Math.round(swatValue),
+                product_id: productId,
+                level1,
+                level2,
+                level3,
+                level4,
+                sales_sum: salesSum,
+                demand_sum: demandValue,
+                prediction_final_sum_demand: predFinalDemand,
+                prediction_final_sum: predictionFinalRounded,
+                swat_sum: swatRounded,
+                difference,
+                bias_percent: biasPercent,
+                osa_percent: metric ? metric.osa_percent : 0,
+                writeoffs_percent: metric ? metric.writeoffs_percent : 0,
+                accuracy_final: metric ? metric.accuracy_final : 0,
                 coefficient_raw: rawCoefficient,
                 coefficient_adjusted: adjustedCoefficient,
                 uplift_factor_percent: upliftFactorPercent
@@ -782,7 +911,7 @@ class CoefficientCalculator {
         if (this.results.length === 0) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
-            cell.colSpan = 7;
+            cell.colSpan = 9;
             cell.className = 'text-center';
             cell.textContent = 'Нет данных для отображения';
             row.appendChild(cell);
@@ -801,19 +930,21 @@ class CoefficientCalculator {
                 this.sanitizeText(item.level4 || ''),
                 (item.sales_sum ?? 0).toLocaleString(),
                 (item.demand_sum ?? 0).toLocaleString(),
-                (item.prediction_final_sum ?? 0).toLocaleString(),
-                (item.swat_sum ?? 0).toLocaleString()
-            ].forEach((content, index) => {
+                Math.round(item.prediction_final_sum ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }),
+                Math.round(item.swat_sum ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }),
+                (item.bias_percent ?? 0).toFixed(1) + '%',
+                (item.osa_percent ?? 0).toFixed(1) + '%'
+            ].forEach((content) => {
                 const cell = document.createElement('td');
                 cell.textContent = content;
                 row.appendChild(cell);
             });
 
-            // Ячейка Difference с цветовым кодированием
+            // Ячейка Difference (целое число)
             const diffCell = document.createElement('td');
-            const diffValue = item.difference ?? 0;
+            const diffValue = Math.round(item.difference ?? 0);
             diffCell.className = `col-diff ${diffValue > 0 ? 'positive' : (diffValue < 0 ? 'negative' : 'neutral')}`;
-            diffCell.textContent = diffValue.toLocaleString();
+            diffCell.textContent = diffValue.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
             row.appendChild(diffCell);
             
             table.appendChild(row);
@@ -822,7 +953,7 @@ class CoefficientCalculator {
         if (this.results.length > 10) {
             const infoRow = document.createElement('tr');
             const infoCell = document.createElement('td');
-            infoCell.colSpan = 7;
+            infoCell.colSpan = 9;
             infoCell.className = 'text-center text-muted';
             infoCell.textContent = `... и ещё ${this.results.length - 10} строк. Скачайте Excel файл для просмотра всех данных.`;
             infoRow.appendChild(infoCell);
@@ -847,7 +978,7 @@ class CoefficientCalculator {
         const totalDemand = this.results.reduce((sum, r) => sum + (r.demand_sum ?? 0), 0);
         const totalSwat = this.results.reduce((sum, r) => sum + (r.swat_sum ?? 0), 0);
         const totalPrediction = this.results.reduce((sum, r) => sum + (r.prediction_final_sum ?? 0), 0);
-        const totalDifference = totalPrediction - totalDemand;
+        const totalDifference = this.results.reduce((sum, r) => sum + (r.difference ?? 0), 0);
         const avgBias = total > 0 ? this.results.reduce((sum, r) => sum + (r.bias_percent ?? 0), 0) / total : 0;
 
         // Безопасное создание статистики
@@ -864,7 +995,7 @@ class CoefficientCalculator {
             { value: totalDemand.toLocaleString(), label: 'Сумма Demand' },
             { value: totalPrediction.toLocaleString(), label: 'Сумма Prediction final' },
             { value: totalSwat.toLocaleString(), label: 'Сумма SWAT' },
-            { value: totalDifference.toLocaleString(), label: 'Общая разница (Pred − Demand)' },
+            { value: Math.round(totalDifference).toLocaleString('ru-RU', { maximumFractionDigits: 0 }), label: 'Сумма Difference (из demand)' },
             { value: avgBias.toFixed(2) + '%', label: 'Средний Bias' }
         ];
 
@@ -914,9 +1045,9 @@ class CoefficientCalculator {
                 'Коэффициент (adjusted)': item.coefficient_adjusted,
                 'Sales': item.sales_sum ?? 0,
                 'Demand': item.demand_sum,
-                'SWAT': item.swat_sum,
-                'Prediction Final': item.prediction_final_sum,
-                'Difference': item.difference,
+                'SWAT': Math.round(item.swat_sum ?? 0),
+                'Prediction Final': Math.round(item.prediction_final_sum ?? 0),
+                'Difference': Math.round(item.difference ?? 0),
                 'Bias %': item.bias_percent || 0,
                 'OSA %': item.osa_percent || 0,
                 'Writeoffs %': item.writeoffs_percent || 0,
@@ -980,12 +1111,13 @@ class CoefficientCalculator {
                 ['Версия numpy', '-'],
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Sales, Demand, SWAT, Prediction Final, Difference, Bias %, OSA %, Writeoffs %'],
-                ['Формула Bias %', '(prediction_final - demand) / demand * 100'],
-                ['Формула Difference', 'prediction_final - demand'],
+                ['Формула коэффициента', 'demand / prediction_final (prediction_final из файлов Prediction Final)'],
+                ['Формула Bias %', '(prediction_final_demand - demand) / demand * 100'],
+                ['Формула Difference', 'prediction_final_demand - demand (округление до целого)'],
                 ['Порядок колонок', 'Sales, Demand, SWAT, Prediction Final'],
                 ['Формула uplift_factor, %', '(prediction_final_sum / swat_sum - 1) * 100'],
                 ['Примечание по процентам', 'Значения OSA % и Writeoffs % отображаются в процентах (например, 0.08 = 0.08%)'],
-                ['Для расчета BIAS и Difference', 'используется значение prediction_final из файлов Demand']
+                ['Для расчета BIAS и Difference', 'используется prediction_final только из файлов DEMAND']
             ];
             const ws3 = XLSX.utils.aoa_to_sheet(infoData);
             XLSX.utils.book_append_sheet(wb, ws3, 'Информация');
@@ -1083,6 +1215,27 @@ class CoefficientCalculator {
         }
     }
 
+    normalizeMeasureToken(raw) {
+        if (raw === null || raw === undefined) return '';
+        return String(raw)
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '');
+    }
+
+    findMeasureColumnKey(row) {
+        if (!row || typeof row !== 'object') return null;
+        const keys = Object.keys(row);
+        for (const k of keys) {
+            const low = k.trim().toLowerCase();
+            if (low.includes('measure') && low.includes('name')) return k;
+        }
+        for (const k of keys) {
+            if (k.trim().toLowerCase().includes('measure')) return k;
+        }
+        return null;
+    }
+
     parseNumber(value) {
         if (value === null || value === undefined || value === '') {
             return 0;
@@ -1095,6 +1248,13 @@ class CoefficientCalculator {
         }
 
         str = str.replace(/"/g, '');
+
+        if (str.includes('%')) {
+            str = str.replace(/%/g, '').replace(/\s/g, '').replace(/,/g, '.');
+            const num = parseFloat(str);
+            return isNaN(num) ? 0 : num / 100;
+        }
+
         str = str.replace(/\s/g, '');
         str = str.replace(/,/g, '.');
 
