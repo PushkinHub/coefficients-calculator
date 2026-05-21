@@ -585,7 +585,7 @@ class CoefficientCalculator {
                     level2: group.level2,
                     level3: group.level3,
                     level4: group.level4,
-                    demand: 0,
+                    demand_raw: 0,
                     sales: 0,
                     prediction_final_demand: 0,
                     osa: 0,
@@ -599,8 +599,8 @@ class CoefficientCalculator {
             const measureNorm = (group.measure || '').toString();
 
             switch (measureNorm) {
-                case 'demand':
-                    aggregated[group.product_id].demand = sum;
+                case 'demandraw':
+                    aggregated[group.product_id].demand_raw = sum;
                     break;
                 case 'sales':
                     aggregated[group.product_id].sales = sum;
@@ -781,7 +781,7 @@ class CoefficientCalculator {
     calculateCoefficients(swatData, demandData) {
         const results = [];
         const demandMetrics = demandData.map(item => {
-            const demandSum = item.demand || 0;
+            const demandSum = item.demand_raw || 0;
             const salesSum = item.sales || 0;
             const predFinalDemand = item.prediction_final_demand || 0;
             const difference = Math.round(predFinalDemand - demandSum);
@@ -824,7 +824,7 @@ class CoefficientCalculator {
                 predictionFromFile = swatItem.prediction_final_sum_swat;
             }
 
-            // Коэффициент: demand / prediction_final (из папки Prediction Final)
+            // Коэффициент: demand_raw / prediction_final (из папки Prediction Final)
             let exactCoefficient = 0;
             if (predictionFromFile !== 0) {
                 exactCoefficient = demandValue / predictionFromFile;
@@ -995,7 +995,7 @@ class CoefficientCalculator {
             { value: totalDemand.toLocaleString(), label: 'Сумма Demand' },
             { value: totalPrediction.toLocaleString(), label: 'Сумма Prediction final' },
             { value: totalSwat.toLocaleString(), label: 'Сумма SWAT' },
-            { value: Math.round(totalDifference).toLocaleString('ru-RU', { maximumFractionDigits: 0 }), label: 'Сумма Difference (из demand)' },
+            { value: Math.round(totalDifference).toLocaleString('ru-RU', { maximumFractionDigits: 0 }), label: 'Сумма Difference (из demand_raw)' },
             { value: avgBias.toFixed(2) + '%', label: 'Средний Bias' }
         ];
 
@@ -1111,9 +1111,9 @@ class CoefficientCalculator {
                 ['Версия numpy', '-'],
                 ['Количество товаров', total],
                 ['Рассчитанные метрики', 'Coefficient, Sales, Demand, SWAT, Prediction Final, Difference, Bias %, OSA %, Writeoffs %'],
-                ['Формула коэффициента', 'demand / prediction_final (prediction_final из файлов Prediction Final)'],
-                ['Формула Bias %', '(prediction_final_demand - demand) / demand * 100'],
-                ['Формула Difference', 'prediction_final_demand - demand (округление до целого)'],
+                ['Формула коэффициента', 'demand_raw / prediction_final (prediction_final из файлов Prediction Final)'],
+                ['Формула Bias %', '(prediction_final_demand - demand_raw) / demand_raw * 100'],
+                ['Формула Difference', 'prediction_final_demand - demand_raw (округление до целого)'],
                 ['Порядок колонок', 'Sales, Demand, SWAT, Prediction Final'],
                 ['Формула uplift_factor, %', '(prediction_final_sum / swat_sum - 1) * 100'],
                 ['Примечание по процентам', 'Значения OSA % и Writeoffs % отображаются в процентах (например, 0.08 = 0.08%)'],
