@@ -1,7 +1,7 @@
 Калькулятор коэффициентов Demand/Prediction Final
 ======================================
 
-Веб‑приложение для автоматического расчёта корректировочных коэффициентов между историческими данными `DEMAND` и прогнозами `Prediction Final`.  
+Веб‑приложение для автоматического расчёта корректировочных коэффициентов между историческими данными `DEMAND_RAW` и прогнозами `Prediction Final`.  
 Приложение работает как **калькулятор в браузере**: вы загружаете файлы, получаете результат и можете скачать отчёт.
 
 Сайт доступен по ссылке:  
@@ -29,8 +29,8 @@ https://pushkinhub.github.io/coefficients-calculator/
 
 Рассчитанные метрики: `Coefficient`, `Difference`, `Bias %`, `OSA %`, `Writeoffs %`, `uplift_factor, %`.
 
-- **Bias %**: (prediction_final - demand) / demand * 100
-- **Difference**: prediction_final - demand
+- **Bias %**: (prediction_final - demand_raw) / demand_raw * 100
+- **Difference**: prediction_final - demand_raw
 
 ## Примеры исходных данных
 
